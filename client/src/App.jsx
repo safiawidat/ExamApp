@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Login from './components/Login';
 import TeacherDashboard from './components/TeacherDashboard';
 import StudentPortal from './components/StudentPortal';
+import ScoresPage from './components/ScoresPage';
 import './App.css';
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
       <main>
         {!role && <Login onLogin={handleLogin} />}
         {role === 'teacher' && <TeacherDashboard />}
+        {role === 'teacher' && <ScoresPage />}
         {role === 'student' && <StudentPortal />}
       </main>
     </div>

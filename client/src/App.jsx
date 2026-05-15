@@ -1,13 +1,18 @@
 import { useState } from 'react';
+import Login from './components/Login';
 import TeacherDashboard from './components/TeacherDashboard';
 import StudentPortal from './components/StudentPortal';
 import './App.css';
 
 function App() {
-  const [role, setRole] = useState('teacher'); // 'teacher' or 'student'
+  const [role, setRole] = useState(null);
 
-  const toggleRole = () => {
-    setRole(role === 'teacher' ? 'student' : 'teacher');
+  const handleLogin = (userRole) => {
+    setRole(userRole);
+  };
+
+  const handleLogout = () => {
+    setRole(null);
   };
 
   return (
@@ -15,26 +20,23 @@ function App() {
       <nav className="navbar navbar-dark bg-dark mb-4 shadow">
         <div className="container">
           <span className="navbar-brand mb-0 h1">E-Test System</span>
-          <div className="d-flex align-items-center">
-            <span className="text-white-50 me-3">Viewing as: <strong>{role.charAt(0).toUpperCase() + role.slice(1)}</strong></span>
-            <button className="btn btn-outline-light btn-sm" onClick={toggleRole}>
-              Switch to {role === 'teacher' ? 'Student' : 'Teacher'} View
-            </button>
-          </div>
+          {role && (
+            <div className="d-flex align-items-center">
+              <span className="text-white-50 me-3">
+                Viewing as: <strong>{role.charAt(0).toUpperCase() + role.slice(1)}</strong>
+              </span>
+              <button className="btn btn-outline-light btn-sm" onClick={handleLogout}>
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </nav>
-
       <main>
-        {role === 'teacher' ? (
-          <TeacherDashboard />
-        ) : (
-          <StudentPortal />
-        )}
+        {!role && <Login onLogin={handleLogin} />}
+        {role === 'teacher' && <TeacherDashboard />}
+        {role === 'student' && <StudentPortal />}
       </main>
-
-      <footer className="container text-center mt-5 py-4 border-top text-muted">
-        <p>&copy; 2026 E-Test System Mock Environment</p>
-      </footer>
     </div>
   );
 }

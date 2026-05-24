@@ -1,29 +1,40 @@
 import { useState } from 'react';
+import storage from '../services/storageService';
 
 const Register = ({ onBackToLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('student');
   const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
 
   const handleRegister = () => {
+    setSuccess('');
+    setError('');
+
     if (!username.trim() || !password.trim()) {
+      setError('Please enter username and password');
       return;
     }
 
-    const users =
-      JSON.parse(localStorage.getItem('users')) || [];
+    const users = storage.get('users', []);
 
-    users.push({
-      username,
-      password,
-      role,
-    });
-
-    localStorage.setItem(
-      'users',
-      JSON.stringify(users)
+    const userExists = users.some(
+      (user) => user.username === username.trim()
     );
+
+    if (userExists) {
+      setError('Username already exists');
+      return;
+    }
+
+    const newUser = {
+      username: username.trim(),
+      password: password.trim(),
+      role,
+    };
+
+    storage.save('users', [...users, newUser]);
 
     setSuccess('User registered successfully');
 
@@ -38,60 +49,48 @@ const Register = ({ onBackToLogin }) => {
         <div className="col-md-4">
           <div className="card shadow">
             <div className="card-header bg-success text-white">
-              <h4 className="mb-0">
-                Register New User
-              </h4>
+              <h4 className="mb-0">Register New User</h4>
             </div>
 
             <div className="card-body">
               <div className="mb-3">
-                <label className="form-label">
-                  Username
-                </label>
+                <label className="form-label">Username</label>
                 <input
                   type="text"
                   className="form-control"
                   value={username}
-                  onChange={(e) =>
-                    setUsername(e.target.value)
-                  }
+                  onChange={(e) => setUsername(e.target.value)}
                 />
               </div>
 
               <div className="mb-3">
-                <label className="form-label">
-                  Password
-                </label>
+                <label className="form-label">Password</label>
                 <input
                   type="password"
                   className="form-control"
                   value={password}
-                  onChange={(e) =>
-                    setPassword(e.target.value)
-                  }
+                  onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
 
               <div className="mb-3">
-                <label className="form-label">
-                  Role
-                </label>
+                <label className="form-label">Role</label>
 
                 <select
                   className="form-select"
                   value={role}
-                  onChange={(e) =>
-                    setRole(e.target.value)
-                  }
+                  onChange={(e) => setRole(e.target.value)}
                 >
-                  <option value="student">
-                    Student
-                  </option>
-                  <option value="teacher">
-                    Teacher
-                  </option>
+                  <option value="student">Student</option>
+                  <option value="teacher">Teacher</option>
                 </select>
               </div>
+
+              {error && (
+                <div className="alert alert-danger">
+                  {error}
+                </div>
+              )}
 
               {success && (
                 <div className="alert alert-success">

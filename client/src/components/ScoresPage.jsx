@@ -1,31 +1,51 @@
-import { mockScores } from '../api/mockDb';
+import { useEffect, useState } from 'react';
+import { getSubmissions } from '../api/examService';
 
 const ScoresPage = () => {
+  const [submissions, setSubmissions] = useState([]);
+
+  useEffect(() => {
+    const loadSubmissions = async () => {
+      const data = await getSubmissions();
+      setSubmissions(data);
+    };
+
+    loadSubmissions();
+  }, []);
+
   return (
-    <div className="container mt-4">
-      <div className="card shadow">
+    <div className="container mt-4 mb-5">
+      <div className="card shadow-sm">
         <div className="card-header bg-success text-white">
-          <h4 className="mb-0">Student Scores</h4>
+          <h4 className="mb-0">Student Submissions and Scores</h4>
         </div>
+
         <div className="card-body">
-          <table className="table table-striped">
-            <thead>
-              <tr>
-                <th>Student Name</th>
-                <th>Exam ID</th>
-                <th>Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockScores.map((score, index) => (
-                <tr key={index}>
-                  <td>{score.studentName}</td>
-                  <td>{score.examId}</td>
-                  <td>{score.score}</td>
+          {submissions.length === 0 ? (
+            <p className="text-muted">No submissions yet.</p>
+          ) : (
+            <table className="table table-striped table-hover">
+              <thead>
+                <tr>
+                  <th>Student Name</th>
+                  <th>Exam ID</th>
+                  <th>Score</th>
+                  <th>Feedback</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+
+              <tbody>
+                {submissions.map((submission) => (
+                  <tr key={submission.id}>
+                    <td>{submission.studentName}</td>
+                    <td>{submission.examId}</td>
+                    <td>{submission.score}</td>
+                    <td>{submission.feedback}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>

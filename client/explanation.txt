@@ -1,0 +1,253 @@
+E-Test System - Project Explanation
+
+Project Assignment 2:
+Full React client application without server, using mock data.
+
+Required Client Content:
+- AUTH: Login and Register components.
+- TEACHERPAGES: TeacherDashboard, AddExam, ExamList, ExamDetails, ScoresPage.
+- STUDENTSPAGES: StudentPortal and StudentForm.
+- NavigationMenu: main navigation bar with current role and logout.
+- Configuration Service: configService.js.
+- Mocking API DB Service: mockDb.js and examService.js.
+- Recommended Services: loggerService.js, storageService.js, notifyService.js.
+
+Project Type:
+React client-side application without server, using mock data.
+
+Main Features:
+- Login for teacher and student.
+- Register new mock user.
+- Teacher dashboard for managing exams.
+- Create new exams.
+- Publish or delete exams.
+- Student portal for viewing available exams.
+- Student exam submission.
+- Scores page for viewing submissions and feedback.
+- Navigation menu with current user role and logout.
+- Mock API DB service using mockDb.js and examService.js.
+- Configuration service.
+- Logger service.
+- Storage service.
+- Notify service.
+- Unit tests using Vitest.
+
+Users:
+1. Teacher
+- Can login.
+- Can create and manage exams.
+- Can publish exams.
+- Can delete exams.
+- Can view student scores and feedback.
+
+2. Student
+- Can register.
+- Can login.
+- Can view available exams.
+- Can enter an exam.
+- Can submit answers.
+
+Pages / Components:
+- App
+- NavigationMenu
+- Login
+- Register
+- TeacherDashboard
+- AddExam
+- ExamList
+- ExamDetails
+- ScoresPage
+- StudentPortal
+- StudentForm
+
+Services:
+- examService: handles mock exam operations.
+- storageService: handles localStorage operations.
+- loggerService: handles info, warning and error logs using OOP class.
+- notifyService: handles notification objects.
+- configService: stores application configuration.
+
+Main Entities Used by Mock DB:
+User:
+- username
+- password
+- role
+
+Exam:
+- id
+- title
+- questions
+
+Question:
+- id
+- question
+- options
+- answer
+
+Submission:
+- studentName
+- examId
+- answers
+- score
+- feedback
+
+Component Hierarchy:
+App
+  NavigationMenu
+  Login
+  Register
+  TeacherDashboard
+    AddExam
+    ExamList
+    ExamDetails
+  ScoresPage
+  StudentPortal
+    StudentForm
+
+Use Case Diagram - Text Representation:
+Teacher
+  -> Login
+  -> Create Exam
+  -> View Exam List
+  -> Publish Exam
+  -> Delete Exam
+  -> View Student Submissions
+  -> View Scores and Feedback
+
+Student
+  -> Register
+  -> Login
+  -> View Available Exams
+  -> Enter Exam
+  -> Submit Answers
+  -> View Feedback
+
+Entity Relations:
+- Teacher manages many Exams.
+- Student submits many Submissions.
+- Exam contains many Questions.
+- Submission belongs to one Exam.
+- Submission belongs to one Student.
+
+UML Class Diagram - Text Representation:
+Class: App
+Responsibilities:
+- Controls current user role.
+- Switches between Login, Register, Teacher pages and Student pages.
+
+Class: NavigationMenu
+Responsibilities:
+- Displays system title.
+- Displays current user role.
+- Handles logout action.
+
+Class: Login
+Responsibilities:
+- Receives username and password.
+- Validates mock users.
+- Sends selected role to App.
+
+Class: Register
+Responsibilities:
+- Receives new user details.
+- Saves mock user data to localStorage.
+- Allows returning to Login page.
+
+Class: TeacherDashboard
+Responsibilities:
+- Loads exams from examService.
+- Creates new exams.
+- Selects exam details.
+- Publishes exams.
+- Deletes exams.
+
+Class: AddExam
+Responsibilities:
+- Receives new exam data.
+- Sends new exam to TeacherDashboard.
+
+Class: ExamList
+Responsibilities:
+- Displays list of exams.
+- Allows selecting, publishing and deleting exams.
+
+Class: ExamDetails
+Responsibilities:
+- Displays selected exam information and questions.
+
+Class: ScoresPage
+Responsibilities:
+- Displays student submissions, grades and feedback.
+
+Class: StudentPortal
+Responsibilities:
+- Loads published exams.
+- Displays available exams to students.
+- Opens selected exam.
+
+Class: StudentForm
+Responsibilities:
+- Displays exam questions.
+- Collects student answers.
+- Submits answers to examService.
+
+Class: examService
+Responsibilities:
+- Simulates API operations.
+- Gets exams from mockDb.
+- Creates exams.
+- Deletes exams.
+- Publishes exams.
+- Submits exams.
+- Gets submissions.
+
+Class: mockDb
+Responsibilities:
+- Stores mock exams.
+- Stores mock scores.
+
+Class: LoggerService
+Responsibilities:
+- Logs info messages.
+- Logs warning messages.
+- Logs error messages.
+
+Class: StorageService
+Responsibilities:
+- Saves data to localStorage.
+- Reads data from localStorage.
+- Removes data from localStorage.
+
+Class: NotifyService
+Responsibilities:
+- Creates success notifications.
+- Creates warning notifications.
+- Creates error notifications.
+
+Class: ConfigService
+Responsibilities:
+- Stores application name.
+- Stores application version.
+- Stores default role.
+- Stores application limits.
+
+Testing:
+The project uses Vitest and Testing Library.
+Current tests include:
+- TeacherDashboard component test.
+- StudentPortal component test.
+- examService test.
+- storageService test.
+- loggerService test.
+- notifyService test.
+- configService test.
+
+Git Workflow:
+Development is done on a feature branch:
+feature/loreenProg
+
+The project is not developed directly on main.
+
+Gemini CLI:
+Gemini CLI was installed and /init was executed.
+A GEMINI.md file was generated for the project.

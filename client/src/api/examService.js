@@ -1,3 +1,5 @@
+// Mock API service responsible for exam operations
+
 import { mockExams } from './mockDb';
 
 export const getAllExams = () => {

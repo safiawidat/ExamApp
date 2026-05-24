@@ -5,7 +5,7 @@ const USERS = [
   { username: 'student', password: '1234', role: 'student' },
 ];
 
-const Login = ({ onLogin }) => {
+const Login = ({ onLogin, onShowRegister }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -51,6 +51,9 @@ const Login = ({ onLogin }) => {
               {error && <div className="alert alert-danger">{error}</div>}
               <button className="btn btn-primary w-100" onClick={handleLogin}>
                 Login
+              </button>
+              <button className="btn btn-outline-secondary w-100 mt-2" onClick={onShowRegister}>
+                Register
               </button>
             </div>
           </div>

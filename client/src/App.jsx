@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import Login from './components/Login';
+import Register from './components/Register';
+import NavigationMenu from './components/NavigationMenu';
 import ScoresPage from './components/ScoresPage';
 import StudentPortal from './components/StudentPortal';
 import TeacherDashboard from './components/TeacherDashboard';
@@ -7,6 +9,7 @@ import './App.css';
 
 function App() {
   const [role, setRole] = useState(null);
+  const [showRegister, setShowRegister] = useState(false);
 
   const handleLogin = (userRole) => {
     setRole(userRole);
@@ -14,31 +17,24 @@ function App() {
 
   const handleLogout = () => {
     setRole(null);
+    setShowRegister(false);
   };
 
   return (
     <div className="min-vh-100 bg-light">
-      <nav className="navbar navbar-dark bg-dark mb-4 shadow">
-        <div className="container">
-          <span className="navbar-brand mb-0 h1">E-Test System</span>
-
-          {role && (
-            <div className="d-flex align-items-center">
-              <span className="text-white-50 me-3">
-                Viewing as:{' '}
-                <strong>{role.charAt(0).toUpperCase() + role.slice(1)}</strong>
-              </span>
-
-              <button className="btn btn-outline-light btn-sm" onClick={handleLogout}>
-                Logout
-              </button>
-            </div>
-          )}
-        </div>
-      </nav>
+      <NavigationMenu role={role} onLogout={handleLogout} />
 
       <main>
-        {!role && <Login onLogin={handleLogin} />}
+        {!role && !showRegister && (
+          <Login
+            onLogin={handleLogin}
+            onShowRegister={() => setShowRegister(true)}
+          />
+        )}
+
+        {!role && showRegister && (
+          <Register onBackToLogin={() => setShowRegister(false)} />
+        )}
 
         {role === 'teacher' && (
           <>

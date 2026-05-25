@@ -1,72 +1,87 @@
-import React, { useState } from 'react';
-import { getExamById } from '../api/examService';
+import { useEffect, useState } from 'react';
+import StudentForm from './StudentForm';
+import { getPublishedExams, submitExam } from '../api/examService';
 
 const StudentPortal = () => {
-  const [examId, setExamId] = useState('');
-  const [exam, setExam] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [availableExams, setAvailableExams] = useState([]);
+  const [selectedExam, setSelectedExam] = useState(null);
+  const [submissionResult, setSubmissionResult] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const handleFetchExam = async () => {
-    if (!examId.trim()) return;
-    
-    setLoading(true);
-    setError('');
-    setExam(null);
-    
-    try {
-      const data = await getExamById(examId);
-      setExam(data);
-    } catch (err) {
-      setError('Exam not found. Please check the ID and try again.');
-    } finally {
+  useEffect(() => {
+    const loadAvailableExams = async () => {
+      const data = await getPublishedExams();
+      setAvailableExams(data);
       setLoading(false);
-    }
+    };
+
+    loadAvailableExams();
+  }, []);
+
+  const handleSubmitExam = async (submissionData) => {
+    const result = await submitExam(submissionData);
+    setSubmissionResult(result);
+    setSelectedExam(null);
   };
+
+  if (selectedExam) {
+    return (
+      <div className="container mt-4">
+        <StudentForm
+          exam={selectedExam}
+          onSubmitExam={handleSubmitExam}
+          onCancel={() => setSelectedExam(null)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="container mt-4">
       <div className="card shadow-sm border-info">
-        <div className="card-header bg-info text-white">
-          <h2 className="mb-0 text-dark">Student Portal</h2>
+        <div className="card-header bg-info text-dark">
+          <h2 className="mb-0">Student Portal</h2>
         </div>
+
         <div className="card-body">
-          {!exam ? (
-            <div className="py-4">
-              <h3 className="card-title h5 mb-3">Join an Exam</h3>
-              <div className="input-group mb-3">
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Enter Exam ID (e.g., math101)"
-                  value={examId}
-                  onChange={(e) => setExamId(e.target.value)}
-                />
-                <button 
-                  className="btn btn-info text-dark" 
-                  type="button" 
-                  onClick={handleFetchExam}
-                  disabled={loading}
-                >
-                  {loading ? 'Searching...' : 'Start Exam'}
-                </button>
-              </div>
-              {error && <div className="alert alert-danger">{error}</div>}
+          {submissionResult && (
+            <div className="alert alert-success">
+              Exam submitted successfully. Your score is{' '}
+              <strong>{submissionResult.score}</strong>. {submissionResult.feedback}
             </div>
+          )}
+
+          <h5 className="mb-3">Available Exams</h5>
+
+          {loading ? (
+            <p>Loading exams...</p>
+          ) : availableExams.length === 0 ? (
+            <div className="alert alert-warning">No published exams are available.</div>
           ) : (
-            <div>
-              <div className="alert alert-success">
-                Successfully loaded: <strong>{exam.title}</strong>
-              </div>
-              <div className="p-3 border rounded bg-light mb-3">
-                <p>Welcome to the exam. You have {exam.questions.length} questions to answer.</p>
-                <button className="btn btn-primary" onClick={() => alert('Exam starting soon!')}>
-                  Begin Test
-                </button>
-                <button className="btn btn-outline-secondary ms-2" onClick={() => setExam(null)}>
-                  Go Back
-                </button>
-              </div>
+            <div className="row g-3">
+              {availableExams.map((exam) => (
+                <div className="col-md-6" key={exam.id}>
+                  <div className="card h-100">
+                    <div className="card-body">
+                      <h5 className="card-title">{exam.title}</h5>
+                      <p className="card-text text-muted">
+                        {exam.description || 'No description.'}
+                      </p>
+                      <p className="mb-3">
+                        <strong>Questions:</strong> {exam.questions?.length || 0}
+                      </p>
+
+                      <button
+                        className="btn btn-primary"
+                        type="button"
+                        onClick={() => setSelectedExam(exam)}
+                      >
+                        Enter Exam
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

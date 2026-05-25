@@ -1,19 +1,28 @@
 import { useState } from 'react';
+import storage from '../services/storageService';
 
-const USERS = [
+const DEFAULT_USERS = [
   { username: 'teacher', password: '1234', role: 'teacher' },
   { username: 'student', password: '1234', role: 'student' },
 ];
 
-const Login = ({ onLogin }) => {
+const Login = ({ onLogin, onShowRegister }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
   const handleLogin = () => {
-    const user = USERS.find(
-      (u) => u.username === username && u.password === password
+    setError('');
+
+    const savedUsers = storage.get('users', []);
+    const allUsers = [...DEFAULT_USERS, ...savedUsers];
+
+    const user = allUsers.find(
+      (u) =>
+        u.username === username.trim() &&
+        u.password === password.trim()
     );
+
     if (user) {
       onLogin(user.role);
     } else {
@@ -29,6 +38,7 @@ const Login = ({ onLogin }) => {
             <div className="card-header bg-dark text-white">
               <h4 className="mb-0">E-Test System Login</h4>
             </div>
+
             <div className="card-body">
               <div className="mb-3">
                 <label className="form-label">Username</label>
@@ -39,6 +49,7 @@ const Login = ({ onLogin }) => {
                   onChange={(e) => setUsername(e.target.value)}
                 />
               </div>
+
               <div className="mb-3">
                 <label className="form-label">Password</label>
                 <input
@@ -48,9 +59,18 @@ const Login = ({ onLogin }) => {
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
+
               {error && <div className="alert alert-danger">{error}</div>}
+
               <button className="btn btn-primary w-100" onClick={handleLogin}>
                 Login
+              </button>
+
+              <button
+                className="btn btn-outline-secondary w-100 mt-2"
+                onClick={onShowRegister}
+              >
+                Register
               </button>
             </div>
           </div>

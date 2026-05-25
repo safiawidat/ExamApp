@@ -1,51 +1,69 @@
 E-Test System - Project Explanation
 
 Project Assignment 2:
-Full React client application without server, using mock data.
+This project is a Full React client-side application for managing online exams.  
+The system works without a server and uses mock data to simulate a real system.
+
+Project Goal:
+The goal of this project is to create an exam management system for teachers and students.  
+Teachers can manage exams, while students can view and submit exams.
 
 Required Client Content:
-- AUTH: Login and Register components.
-- TEACHERPAGES: TeacherDashboard, AddExam, ExamList, ExamDetails, ScoresPage.
-- STUDENTSPAGES: StudentPortal and StudentForm.
-- NavigationMenu: main navigation bar with current role and logout.
-- Configuration Service: configService.js.
-- Mocking API DB Service: mockDb.js and examService.js.
-- Recommended Services: loggerService.js, storageService.js, notifyService.js.
 
-Project Type:
-React client-side application without server, using mock data.
+AUTH:
+- Login
+- Register
+
+Teacher Pages:
+- TeacherDashboard
+- AddExam
+- ExamList
+- ExamDetails
+- ScoresPage
+
+Student Pages:
+- StudentPortal
+- StudentForm
+
+Navigation:
+- NavigationMenu for navigation, role display and logout.
+
+Services:
+- Configuration Service (configService.js)
+- Mock API DB Service (mockDb.js + examService.js)
+- Logger Service
+- Storage Service
+- Notify Service
 
 Main Features:
-- Login for teacher and student.
-- Register new mock user.
-- Teacher dashboard for managing exams.
-- Create new exams.
-- Publish or delete exams.
-- Student portal for viewing available exams.
-- Student exam submission.
-- Scores page for viewing submissions and feedback.
-- Navigation menu with current user role and logout.
-- Mock API DB service using mockDb.js and examService.js.
-- Configuration service.
-- Logger service.
-- Storage service.
-- Notify service.
-- Unit tests using Vitest.
+- Login for teacher and student users.
+- Register new users.
+- Teacher can create exams.
+- Teacher can publish and delete exams.
+- Teacher can view student submissions and grades.
+- Student can view available exams.
+- Student can enter and submit exams.
+- Navigation menu with logout option.
+- Local storage support for saved users.
+- Unit testing using Vitest.
 
 Users:
-1. Teacher
-- Can login.
-- Can create and manage exams.
-- Can publish exams.
-- Can delete exams.
-- Can view student scores and feedback.
 
-2. Student
-- Can register.
-- Can login.
-- Can view available exams.
-- Can enter an exam.
-- Can submit answers.
+Teacher:
+- Login to the system.
+- Create exams.
+- View exam list.
+- Publish exams.
+- Delete exams.
+- View student submissions.
+- View grades and feedback.
+
+Student:
+- Register to the system.
+- Login to the system.
+- View available exams.
+- Enter an exam.
+- Submit answers.
 
 Pages / Components:
 - App
@@ -61,13 +79,37 @@ Pages / Components:
 - StudentForm
 
 Services:
-- examService: handles mock exam operations.
-- storageService: handles localStorage operations.
-- loggerService: handles info, warning and error logs using OOP class.
-- notifyService: handles notification objects.
-- configService: stores application configuration.
 
-Main Entities Used by Mock DB:
+examService:
+Handles exam operations such as:
+- Get exams
+- Create exams
+- Delete exams
+- Publish exams
+- Submit student exams
+- Get submissions
+
+storageService:
+- Save data to localStorage
+- Read data from localStorage
+- Remove saved data
+
+loggerService:
+- Log info messages
+- Log warning messages
+- Log error messages
+
+notifyService:
+- Create notifications
+
+configService:
+Stores application configuration such as:
+- App name
+- Version
+- Default settings
+
+Main Entities Used in Mock DB:
+
 User:
 - username
 - password
@@ -92,162 +134,97 @@ Submission:
 - feedback
 
 Component Hierarchy:
+
 App
-  NavigationMenu
-  Login
-  Register
-  TeacherDashboard
-    AddExam
-    ExamList
-    ExamDetails
-  ScoresPage
-  StudentPortal
-    StudentForm
+ ├── NavigationMenu
+ ├── Login
+ ├── Register
+ ├── TeacherDashboard
+ │     ├── AddExam
+ │     ├── ExamList
+ │     └── ExamDetails
+ ├── ScoresPage
+ └── StudentPortal
+       └── StudentForm
 
-Use Case Diagram - Text Representation:
-Teacher
-  -> Login
-  -> Create Exam
-  -> View Exam List
-  -> Publish Exam
-  -> Delete Exam
-  -> View Student Submissions
-  -> View Scores and Feedback
+Use Cases:
 
-Student
-  -> Register
-  -> Login
-  -> View Available Exams
-  -> Enter Exam
-  -> Submit Answers
-  -> View Feedback
+Teacher:
+- Login
+- Create Exam
+- View Exams
+- Publish Exam
+- Delete Exam
+- View Student Scores
+
+Student:
+- Register
+- Login
+- View Available Exams
+- Enter Exam
+- Submit Answers
 
 Entity Relations:
-- Teacher manages many Exams.
-- Student submits many Submissions.
-- Exam contains many Questions.
-- Submission belongs to one Exam.
-- Submission belongs to one Student.
+- Teacher manages many exams.
+- Student can submit exams.
+- Exam contains questions.
+- Submission belongs to one exam and one student.
 
-UML Class Diagram - Text Representation:
-Class: App
-Responsibilities:
-- Controls current user role.
-- Switches between Login, Register, Teacher pages and Student pages.
+UML - Text Representation:
 
-Class: NavigationMenu
-Responsibilities:
-- Displays system title.
-- Displays current user role.
-- Handles logout action.
+App:
+Responsible for navigation between pages according to user role.
 
-Class: Login
-Responsibilities:
-- Receives username and password.
-- Validates mock users.
-- Sends selected role to App.
+Login:
+Responsible for user authentication.
 
-Class: Register
-Responsibilities:
-- Receives new user details.
-- Saves mock user data to localStorage.
-- Allows returning to Login page.
+Register:
+Responsible for creating a new user.
 
-Class: TeacherDashboard
-Responsibilities:
-- Loads exams from examService.
-- Creates new exams.
-- Selects exam details.
-- Publishes exams.
-- Deletes exams.
+TeacherDashboard:
+Responsible for teacher exam management.
 
-Class: AddExam
-Responsibilities:
-- Receives new exam data.
-- Sends new exam to TeacherDashboard.
+StudentPortal:
+Responsible for showing available exams.
 
-Class: ExamList
-Responsibilities:
-- Displays list of exams.
-- Allows selecting, publishing and deleting exams.
+StudentForm:
+Responsible for submitting answers.
 
-Class: ExamDetails
-Responsibilities:
-- Displays selected exam information and questions.
+examService:
+Responsible for mock API operations.
 
-Class: ScoresPage
-Responsibilities:
-- Displays student submissions, grades and feedback.
+storageService:
+Responsible for local storage operations.
 
-Class: StudentPortal
-Responsibilities:
-- Loads published exams.
-- Displays available exams to students.
-- Opens selected exam.
+loggerService:
+Responsible for logging system messages.
 
-Class: StudentForm
-Responsibilities:
-- Displays exam questions.
-- Collects student answers.
-- Submits answers to examService.
+notifyService:
+Responsible for notifications.
 
-Class: examService
-Responsibilities:
-- Simulates API operations.
-- Gets exams from mockDb.
-- Creates exams.
-- Deletes exams.
-- Publishes exams.
-- Submits exams.
-- Gets submissions.
-
-Class: mockDb
-Responsibilities:
-- Stores mock exams.
-- Stores mock scores.
-
-Class: LoggerService
-Responsibilities:
-- Logs info messages.
-- Logs warning messages.
-- Logs error messages.
-
-Class: StorageService
-Responsibilities:
-- Saves data to localStorage.
-- Reads data from localStorage.
-- Removes data from localStorage.
-
-Class: NotifyService
-Responsibilities:
-- Creates success notifications.
-- Creates warning notifications.
-- Creates error notifications.
-
-Class: ConfigService
-Responsibilities:
-- Stores application name.
-- Stores application version.
-- Stores default role.
-- Stores application limits.
+configService:
+Responsible for application configuration.
 
 Testing:
 The project uses Vitest and Testing Library.
-Current tests include:
-- TeacherDashboard component test.
-- StudentPortal component test.
-- examService test.
-- storageService test.
-- loggerService test.
-- notifyService test.
-- configService test.
+
+Current tests:
+- TeacherDashboard test
+- StudentPortal test
+- examService test
+- storageService test
+- loggerService test
+- notifyService test
+- configService test
 
 Git Workflow:
-Development is done on a feature branch:
+The project was developed using Git branches.
+
+Current development branch:
 feature/loreenProg
 
-The project is not developed directly on main.
+Development was not done directly on main.
 
 Gemini CLI:
-Gemini CLI was installed and /init was executed.
+Gemini CLI was installed and /init command was executed.
 A GEMINI.md file was generated for the project.

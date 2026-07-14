@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   createExamType,
   deleteExamType,
@@ -13,6 +13,7 @@ import {
 } from '../api/lecturerExamService';
 import ExamManager from './ExamManager';
 import ExamTypeManager from './ExamTypeManager';
+import QuestionEditor from './QuestionEditor';
 import { safeApiMessage } from './authoringUi';
 
 const loadWorkspace = () => Promise.all([
@@ -129,24 +130,23 @@ const TeacherDashboard = ({ currentUser, onOpenQuestionEditor }) => {
     setSelectedExamId(exam.id);
   };
 
+  const handleQuestionCountChange = useCallback((questionCount) => {
+    setExams((current) => current.map((exam) => (
+      exam.id === selectedExamId
+        ? { ...exam, question_count: questionCount }
+        : exam
+    )));
+  }, [selectedExamId]);
+
   const selectedExam = exams.find((exam) => exam.id === selectedExamId);
 
   if (selectedExam) {
     return (
-      <section className="container py-4" aria-labelledby="question-editor-heading">
-        <button
-          className="btn btn-outline-secondary mb-3"
-          type="button"
-          onClick={() => setSelectedExamId(null)}
-        >
-          Back to exams
-        </button>
-        <h1 id="question-editor-heading" className="h2">Question editor</h1>
-        <h2 className="h4">{selectedExam.title}</h2>
-        <p className="text-muted mb-0">
-          Manage the questions for this draft exam.
-        </p>
-      </section>
+      <QuestionEditor
+        exam={selectedExam}
+        onBack={() => setSelectedExamId(null)}
+        onQuestionCountChange={handleQuestionCountChange}
+      />
     );
   }
 

@@ -27,6 +27,7 @@ import {
   listLecturerExams,
   updateLecturerExam,
 } from '../api/lecturerExamService';
+import { listQuestions } from '../api/questionService';
 import TeacherDashboard from './TeacherDashboard';
 
 vi.mock('../api/examTypeService', () => ({
@@ -41,6 +42,14 @@ vi.mock('../api/lecturerExamService', () => ({
   deleteLecturerExam: vi.fn(),
   listLecturerExams: vi.fn(),
   updateLecturerExam: vi.fn(),
+}));
+
+vi.mock('../api/questionService', () => ({
+  createQuestion: vi.fn(),
+  deleteQuestion: vi.fn(),
+  listQuestions: vi.fn(),
+  reorderQuestions: vi.fn(),
+  updateQuestion: vi.fn(),
 }));
 
 const lecturer = {
@@ -114,6 +123,7 @@ let fetchSpy;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  listQuestions.mockResolvedValue([]);
   fetchSpy = vi.fn();
   vi.stubGlobal('fetch', fetchSpy);
 });

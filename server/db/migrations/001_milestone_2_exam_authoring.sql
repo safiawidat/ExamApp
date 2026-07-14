@@ -6,7 +6,9 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 
 DO $migration$
 DECLARE
-  unexpected_legacy_exam_count INTEGER;
+  legacy_exam_count BIGINT;
+  javascript_bootstrap_exam_count BIGINT;
+  node_bootstrap_exam_count BIGINT;
 BEGIN
   IF TO_REGCLASS('public.users') IS NULL THEN
     RAISE EXCEPTION
@@ -48,24 +50,36 @@ BEGIN
         'The legacy exams table does not match the expected Milestone 1 schema.';
     END IF;
 
-    SELECT COUNT(*)
-    INTO unexpected_legacy_exam_count
-    FROM exams
-    WHERE NOT (
-      title = 'JavaScript Fundamentals'
-      AND description = 'A sample exam covering JavaScript basics.'
-      AND status = 'draft'
-    )
-    AND NOT (
-      title = 'Node.js Fundamentals'
-      AND description = 'A sample exam covering Node.js basics.'
-      AND status = 'draft'
-    );
+    -- Replacement is intentionally limited to the complete bootstrap dataset.
+    -- Empty, missing, duplicate, and otherwise unexpected datasets are preserved.
+    SELECT
+      COUNT(*),
+      COUNT(*) FILTER (
+        WHERE title IS NOT DISTINCT FROM 'JavaScript Fundamentals'
+          AND description IS NOT DISTINCT FROM
+            'A sample exam covering JavaScript basics.'
+          AND status IS NOT DISTINCT FROM 'draft'
+      ),
+      COUNT(*) FILTER (
+        WHERE title IS NOT DISTINCT FROM 'Node.js Fundamentals'
+          AND description IS NOT DISTINCT FROM
+            'A sample exam covering Node.js basics.'
+          AND status IS NOT DISTINCT FROM 'draft'
+      )
+    INTO
+      legacy_exam_count,
+      javascript_bootstrap_exam_count,
+      node_bootstrap_exam_count
+    FROM exams;
 
-    IF unexpected_legacy_exam_count > 0 THEN
+    IF legacy_exam_count <> 2
+      OR javascript_bootstrap_exam_count <> 1
+      OR node_bootstrap_exam_count <> 1 THEN
       RAISE EXCEPTION
-        'Cannot migrate % ownerless legacy exam record(s). Export or remove those records before retrying; users and the database volume can be preserved.',
-        unexpected_legacy_exam_count;
+        'Cannot replace the legacy exams table because it does not contain exactly one copy of each expected bootstrap record (total: %, JavaScript: %, Node.js: %). Export or reconcile those records before retrying; users and the database volume can be preserved.',
+        legacy_exam_count,
+        javascript_bootstrap_exam_count,
+        node_bootstrap_exam_count;
     END IF;
 
     DROP TABLE exams;

@@ -1,7 +1,7 @@
 # GEMINI.md
 
 ## Project Overview
-**E-Test System** is a React-based web application designed for managing and conducting online examinations. It provides a role-based interface for both students and teachers.
+**E-Test System** is a React-based web application for role-based examination workflows. The backend role is named `lecturer`; the lecturer entry component retains the historical `TeacherDashboard` name.
 
 ### Main Technologies
 - **Framework:** [React 19](https://react.dev/)
@@ -13,10 +13,12 @@
 ## Architecture
 The project follows a modular architecture centered around React components and utility services:
 
-- **`src/api/`**: Handles data operations. Includes `examService.js` for exam-related logic and `mockDb.js` for simulated data persistence.
+- **`src/api/`**: `apiClient.js` handles authenticated HTTP requests and the session token. `examTypeService.js`, `lecturerExamService.js`, and `questionService.js` provide server-backed lecturer authoring. `examService.js` and `mockDb.js` remain only for the legacy student prototype.
 - **`src/components/`**: Contains all UI components. Key components include:
-    - `TeacherDashboard.jsx`: Management interface for instructors.
-    - `StudentPortal.jsx`: Interface for students to take exams.
+    - `TeacherDashboard.jsx`: Lecturer authoring entry point.
+    - `ExamTypeManager.jsx` / `ExamManager.jsx`: Shared-type and owned-draft management.
+    - `QuestionEditor.jsx` / `QuestionForm.jsx`: Question CRUD, transitions, and reorder for all supported types.
+    - `StudentPortal.jsx`: Legacy mock interface for students to take exams.
     - `Login.jsx` / `Register.jsx`: Authentication flow.
 - **`src/services/`**: Provides cross-cutting concerns:
     - `configService.js`: Global application configuration.
@@ -58,4 +60,8 @@ npm run deploy
 - **Service Encapsulation:** Business logic, API calls, and utility functions should reside in the `services/` or `api/` directories rather than inside components.
 - **Testing Practice:** Each new feature or service should include corresponding tests (e.g., `*.test.js` or `*.test.jsx`).
 - **Styling:** Uses Bootstrap classes for layout and basic styling, supplemented by `App.css` and `index.css`.
-- **Mocking:** For development without a backend, use and extend `src/api/mockDb.js`.
+- **Lecturer source of truth:** Do not use or extend mock storage for lecturer authoring. PostgreSQL through the authenticated API is authoritative.
+- **API boundary:** Components must not call `fetch` directly; use the API service modules. Client storage and user-supplied role values are never authorization authority.
+- **Question contract:** Use `question_type`, `prompt`, boolean `correct_answer` for true/false, `reference_answer` for short answer, and `options` for multiple choice. Do not send stale fields during a type transition.
+- **Safe interaction:** Preserve pending-state lockout, safe public errors, and confirmations for destructive changes or populated type transitions.
+- **Milestone boundary:** Do not add publishing, student delivery or submissions, grading, or results as part of lecturer authoring work.

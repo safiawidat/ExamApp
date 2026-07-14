@@ -14,6 +14,10 @@ import {
 } from './api/authService';
 import './App.css';
 
+const validUserRoles = new Set(['student', 'lecturer']);
+const invalidSessionMessage = 'Your session is no longer valid. Please log in again.';
+const hasValidUserRole = (user) => validUserRoles.has(user?.role);
+
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
@@ -28,11 +32,17 @@ function App() {
       }
 
       try {
-        setCurrentUser(await getCurrentUser());
+        const restoredUser = await getCurrentUser();
+
+        if (!hasValidUserRole(restoredUser)) {
+          throw new Error('Invalid authenticated user.');
+        }
+
+        setCurrentUser(restoredUser);
       } catch {
         logout();
         setCurrentUser(null);
-        setSessionMessage('Your session is no longer valid. Please log in again.');
+        setSessionMessage(invalidSessionMessage);
       } finally {
         setIsSessionLoading(false);
       }
@@ -43,6 +53,15 @@ function App() {
 
   const handleLogin = async (credentials) => {
     const user = await login(credentials);
+
+    if (!hasValidUserRole(user)) {
+      logout();
+      setCurrentUser(null);
+      setShowRegister(false);
+      setSessionMessage(invalidSessionMessage);
+      return;
+    }
+
     setCurrentUser(user);
     setShowRegister(false);
     setSessionMessage('');
@@ -50,6 +69,15 @@ function App() {
 
   const handleRegister = async (credentials) => {
     const user = await registerStudent(credentials);
+
+    if (!hasValidUserRole(user)) {
+      logout();
+      setCurrentUser(null);
+      setShowRegister(false);
+      setSessionMessage(invalidSessionMessage);
+      return;
+    }
+
     setCurrentUser(user);
     setShowRegister(false);
     setSessionMessage('');
@@ -77,6 +105,7 @@ function App() {
 
         {!isSessionLoading && !currentUser && !showRegister && (
           <Login
+            key={sessionMessage}
             onLogin={handleLogin}
             onShowRegister={() => setShowRegister(true)}
             initialError={sessionMessage}

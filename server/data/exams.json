@@ -1,0 +1,14 @@
+[
+  {
+    "id": 1,
+    "title": "JavaScript Fundamentals",
+    "description": "A sample exam covering JavaScript basics.",
+    "status": "draft"
+  },
+  {
+    "id": 2,
+    "title": "Node.js Fundamentals",
+    "description": "A sample exam covering Node.js basics.",
+    "status": "draft"
+  }
+]

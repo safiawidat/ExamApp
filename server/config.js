@@ -13,13 +13,28 @@ if (!['true', 'false'].includes(dbSslValue)) {
   throw new Error('DB_SSL must be either "true" or "false".');
 }
 
-if (dataSource === 'postgres' && !process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL is required when DATA_SOURCE is "postgres".');
-}
-
 export const config = {
   port: Number(process.env.PORT) || 3001,
   dataSource,
   databaseUrl: process.env.DATABASE_URL,
   dbSsl: dbSslValue === 'true',
+  jwtSecret: process.env.JWT_SECRET,
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '1h',
+  clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+  seedLecturerUsername: process.env.SEED_LECTURER_USERNAME,
+  seedLecturerPassword: process.env.SEED_LECTURER_PASSWORD,
 };
+
+export function validateDatabaseConfig() {
+  if (!config.databaseUrl) {
+    throw new Error('DATABASE_URL is required.');
+  }
+}
+
+export function validateRuntimeConfig() {
+  validateDatabaseConfig();
+
+  if (!config.jwtSecret) {
+    throw new Error('JWT_SECRET is required.');
+  }
+}

@@ -76,6 +76,8 @@ npm.cmd run db:migrate
 
 The migration preserves users and replaces a legacy `exams` table only when it contains exactly two rows: one NULL-safe match for each known bootstrap tuple. An empty legacy table, a missing or duplicate bootstrap row, an unexpected title or description, and an unexpected `NULL` description all stop the transactional migration before the legacy table is dropped. A fresh database with no legacy `exams` table is supported. Applied versions are recorded in `schema_migrations`; rerunning a successful migration safely skips it.
 
+Migration 002 establishes distinct database storage for `multiple_choice`, `true_false`, and `short_answer` questions. It does not implement the question-authoring API.
+
 ## Install and start the server
 
 ```powershell

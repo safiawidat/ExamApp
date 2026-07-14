@@ -1,0 +1,12 @@
+services:
+  gateway:
+    build: ./gateway
+    ports:
+      - "3000:3000"
+    environment:
+      EXAM_SERVICE_URL: http://exam-service:3002
+    depends_on:
+      - exam-service
+
+  exam-service:
+    build: ./exam-service

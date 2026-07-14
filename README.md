@@ -65,7 +65,16 @@ $env:POSTGRES_PORT = '5432'
 docker compose -f docker/compose.dev.yaml up -d --build
 ```
 
-Wait for the `postgres` service to become healthy. The schema in `docker/postgres/init.sql` is applied only when a fresh database volume is initialized.
+Wait for the `postgres` service to become healthy. PostgreSQL entrypoint initialization runs only when a fresh database volume is initialized.
+
+Fresh databases apply the base user schema and the versioned Milestone 2 migration automatically. To upgrade an existing development database without deleting its volume, configure `DATABASE_URL` in `server/.env`, then run:
+
+```powershell
+cd server
+npm.cmd run db:migrate
+```
+
+The migration preserves users and removes only the two exact legacy bootstrap exam rows, which have no owner. It stops with a clear error if other ownerless legacy exam rows exist so they can be exported or removed deliberately before retrying. Applied versions are recorded in `schema_migrations`; rerunning the command safely skips them.
 
 ## Install and start the server
 

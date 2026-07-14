@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
 import App from './App';
@@ -9,6 +9,15 @@ import {
   logout,
   registerStudent,
 } from './api/authService';
+
+vi.mock('./components/TeacherDashboard', () => ({
+  default: vi.fn(({ currentUser }) => (
+    <section aria-label="Lecturer exam management">
+      <h2>Teacher Dashboard</h2>
+      <p>{currentUser.username}</p>
+    </section>
+  )),
+}));
 
 vi.mock('./api/authService', () => ({
   getCurrentUser: vi.fn(),
@@ -47,6 +56,18 @@ test('an existing valid token restores the server-returned lecturer', async () =
   getCurrentUser.mockResolvedValue(lecturer);
   render(<App />);
   expect(await screen.findByRole('heading', { name: 'Teacher Dashboard' })).toBeInTheDocument();
+  expect(within(screen.getByLabelText('Lecturer exam management'))
+    .getByText(lecturer.username)).toBeInTheDocument();
+});
+
+test('a restored student never renders lecturer exam management', async () => {
+  getStoredToken.mockReturnValue('test-only-token-placeholder');
+  getCurrentUser.mockResolvedValue(student);
+
+  render(<App />);
+
+  expect(await screen.findByRole('heading', { name: 'Student Portal' })).toBeInTheDocument();
+  expect(screen.queryByLabelText('Lecturer exam management')).not.toBeInTheDocument();
 });
 
 test('invalid restoration clears authentication and returns to login', async () => {

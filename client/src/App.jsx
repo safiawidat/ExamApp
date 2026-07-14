@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import Login from './components/Login';
 import Register from './components/Register';
 import NavigationMenu from './components/NavigationMenu';
-import ScoresPage from './components/ScoresPage';
 import StudentPortal from './components/StudentPortal';
 import TeacherDashboard from './components/TeacherDashboard';
 import {
@@ -120,10 +119,7 @@ function App() {
         )}
 
         {!isSessionLoading && currentUser?.role === 'lecturer' && (
-          <>
-            <TeacherDashboard />
-            <ScoresPage />
-          </>
+          <TeacherDashboard currentUser={currentUser} />
         )}
 
         {!isSessionLoading && currentUser?.role === 'student' && <StudentPortal />}

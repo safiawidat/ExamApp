@@ -1,32 +1,27 @@
 import { useState } from 'react';
-import storage from '../services/storageService';
 
-const DEFAULT_USERS = [
-  { username: 'teacher', password: '1234', role: 'teacher' },
-  { username: 'student', password: '1234', role: 'student' },
-];
-
-const Login = ({ onLogin, onShowRegister }) => {
+const Login = ({ onLogin, onShowRegister, initialError = '' }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(initialError);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async (event) => {
+    event.preventDefault();
+
+    if (isSubmitting) {
+      return;
+    }
+
     setError('');
+    setIsSubmitting(true);
 
-    const savedUsers = storage.get('users', []);
-    const allUsers = [...DEFAULT_USERS, ...savedUsers];
-
-    const user = allUsers.find(
-      (u) =>
-        u.username === username.trim() &&
-        u.password === password.trim()
-    );
-
-    if (user) {
-      onLogin(user.role);
-    } else {
-      setError('Invalid username or password');
+    try {
+      await onLogin({ username: username.trim(), password });
+    } catch (requestError) {
+      setError(requestError?.message || 'Unable to log in. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -39,40 +34,48 @@ const Login = ({ onLogin, onShowRegister }) => {
               <h4 className="mb-0">E-Test System Login</h4>
             </div>
 
-            <div className="card-body">
+            <form className="card-body" onSubmit={handleLogin}>
               <div className="mb-3">
-                <label className="form-label">Username</label>
+                <label className="form-label" htmlFor="login-username">Username</label>
                 <input
+                  id="login-username"
                   type="text"
                   className="form-control"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
+                  required
                 />
               </div>
 
               <div className="mb-3">
-                <label className="form-label">Password</label>
+                <label className="form-label" htmlFor="login-password">Password</label>
                 <input
+                  id="login-password"
                   type="password"
                   className="form-control"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
                 />
               </div>
 
               {error && <div className="alert alert-danger">{error}</div>}
 
-              <button className="btn btn-primary w-100" onClick={handleLogin}>
-                Login
+              <button className="btn btn-primary w-100" type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Logging in...' : 'Login'}
               </button>
 
               <button
                 className="btn btn-outline-secondary w-100 mt-2"
+                type="button"
                 onClick={onShowRegister}
+                disabled={isSubmitting}
               >
                 Register
               </button>
-            </div>
+            </form>
           </div>
         </div>
       </div>

@@ -76,10 +76,21 @@ export async function loadTestApplication() {
   }
 }
 
-export async function cleanTestRecords(pool, examIds = []) {
+export async function cleanTestRecords(pool, examIds = [], examTypeIds = []) {
   if (examIds.length > 0) {
     await pool.query('DELETE FROM exams WHERE id = ANY($1::int[])', [examIds]);
   }
 
-  await pool.query('DELETE FROM users WHERE username LIKE $1', [`${runPrefix}%`]);
+  if (examTypeIds.length > 0) {
+    await pool.query(
+      'DELETE FROM exam_types WHERE id = ANY($1::int[])',
+      [examTypeIds],
+    );
+  }
+
+  const usernamePrefix = `${runPrefix}_`;
+  await pool.query(
+    'DELETE FROM users WHERE LEFT(username, LENGTH($1)) = $1',
+    [usernamePrefix],
+  );
 }

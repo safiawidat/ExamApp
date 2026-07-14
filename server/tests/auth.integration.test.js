@@ -13,6 +13,7 @@ const replacementPassword = 'Replacement test password 84!';
 const genericCredentialError = { error: 'Invalid username or password.' };
 const apiBodies = [];
 const createdExamIds = [];
+const createdExamTypeIds = [];
 
 let app;
 let pool;
@@ -68,7 +69,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (pool) {
     try {
-      await cleanTestRecords(pool, createdExamIds);
+      await cleanTestRecords(pool, createdExamIds, createdExamTypeIds);
     } finally {
       await pool.end();
     }
@@ -236,32 +237,56 @@ describe('lecturer seeding behavior', () => {
   });
 });
 
-describe('existing exam boundaries', () => {
-  test('requires authentication to list exams and permits a student to list them', async () => {
+describe('Milestone 2 exam authoring contract', () => {
+  test('supersedes the temporary exam list with a lecturer-only boundary', async () => {
     const missing = record(await request(app).get('/api/exams'));
-    const registration = await registerStudent('exam_student');
-    const allowed = record(await request(app)
+    const student = await registerStudent('exam_list_student');
+    const studentList = record(await request(app)
       .get('/api/exams')
-      .set('Authorization', `Bearer ${registration.body.token}`));
+      .set('Authorization', `Bearer ${student.body.token}`));
+
+    await seedLecturer('exam_list_lecturer');
+    const lecturer = await login(username('exam_list_lecturer'));
+    const lecturerList = record(await request(app)
+      .get('/api/exams')
+      .set('Authorization', `Bearer ${lecturer.body.token}`));
+
     expect(missing.status).toBe(401);
-    expect(allowed.status).toBe(200);
-    expect(Array.isArray(allowed.body)).toBe(true);
+    expect(studentList.status).toBe(403);
+    expect(lecturerList.status).toBe(200);
+    expect(Array.isArray(lecturerList.body)).toBe(true);
   });
 
-  test('rejects student exam creation and permits valid lecturer creation', async () => {
+  test('rejects student creation and permits lecturer creation with a valid exam type', async () => {
     const student = await registerStudent('exam_create_student');
     const forbidden = record(await request(app)
       .post('/api/exams')
       .set('Authorization', `Bearer ${student.body.token}`)
-      .send({ title: 'Test-only forbidden exam' }));
+      .send({ exam_type_id: 1, title: 'Test-only forbidden exam' }));
     expect(forbidden.status).toBe(403);
 
-    await seedLecturer('exam_lecturer');
-    const lecturer = await login(username('exam_lecturer'));
+    await seedLecturer('exam_create_lecturer');
+    const lecturer = await login(username('exam_create_lecturer'));
+    const authorization = `Bearer ${lecturer.body.token}`;
+    const examType = record(await request(app)
+      .post('/api/exam-types')
+      .set('Authorization', authorization)
+      .send({ name: `${username('auth_boundary')}_type` }));
+
+    if (Number.isSafeInteger(examType.body.id) && examType.body.id > 0) {
+      createdExamTypeIds.push(examType.body.id);
+    }
+
+    expect(examType.status).toBe(201);
+
     const created = record(await request(app)
       .post('/api/exams')
-      .set('Authorization', `Bearer ${lecturer.body.token}`)
-      .send({ title: 'Test-only integration exam', description: 'Created by Vitest.' }));
+      .set('Authorization', authorization)
+      .send({
+        exam_type_id: examType.body.id,
+        title: 'Test-only integration exam',
+        description: 'Created by Vitest.',
+      }));
 
     if (Number.isSafeInteger(created.body.id) && created.body.id > 0) {
       createdExamIds.push(created.body.id);

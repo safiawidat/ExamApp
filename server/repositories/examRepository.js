@@ -4,10 +4,7 @@ import { PostgresExamRepository } from './postgresExamRepository.js';
 
 const repositories = {
   json: () => new JsonExamRepository(),
-  postgres: () => new PostgresExamRepository({
-    connectionString: config.databaseUrl,
-    ssl: config.dbSsl,
-  }),
+  postgres: () => new PostgresExamRepository(),
 };
 
 export const examRepository = repositories[config.dataSource]();

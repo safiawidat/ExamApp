@@ -1,13 +1,8 @@
-import pg from 'pg';
-
-const { Pool } = pg;
+import { pool } from '../db/pool.js';
 
 export class PostgresExamRepository {
-  constructor({ connectionString, ssl }) {
-    this.pool = new Pool({
-      connectionString,
-      ssl: ssl ? { rejectUnauthorized: false } : false,
-    });
+  constructor({ databasePool = pool } = {}) {
+    this.pool = databasePool;
   }
 
   async getAll() {

@@ -63,8 +63,8 @@ export async function findAllOwnedExams(lecturerId) {
   return result.rows.map(mapExam);
 }
 
-export async function findOwnedExamById(id, lecturerId) {
-  const result = await pool.query(
+export async function findOwnedExamById(id, lecturerId, executor = pool) {
+  const result = await executor.query(
     `SELECT ${examProjection}
      FROM exams e
      JOIN exam_types et ON et.id = e.exam_type_id
@@ -150,4 +150,58 @@ export async function deleteOwnedDraftExam(id, lecturerId) {
   );
 
   return result.rowCount > 0;
+}
+
+export async function publishOwnedDraftExam(id, lecturerId) {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+    const examResult = await client.query(
+      `SELECT id, status
+       FROM exams
+       WHERE id = $1 AND lecturer_id = $2
+       FOR UPDATE`,
+      [id, lecturerId],
+    );
+    const exam = examResult.rows[0];
+
+    if (!exam) {
+      throw new HttpError(404, 'Exam not found.');
+    }
+
+    if (exam.status !== 'draft') {
+      throw new HttpError(409, 'Exam is already published.');
+    }
+
+    const questionResult = await client.query(
+      `SELECT COUNT(*)::INTEGER AS question_count
+       FROM questions
+       WHERE exam_id = $1`,
+      [id],
+    );
+
+    if (questionResult.rows[0].question_count === 0) {
+      throw new HttpError(
+        409,
+        'Exam must contain at least one question before publishing.',
+      );
+    }
+
+    await client.query(
+      `UPDATE exams
+       SET status = 'published', published_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND lecturer_id = $2`,
+      [id, lecturerId],
+    );
+
+    const publishedExam = await findOwnedExamById(id, lecturerId, client);
+    await client.query('COMMIT');
+    return publishedExam;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }

@@ -5,6 +5,7 @@ import {
   deleteOwnedDraftExam,
   findAllOwnedExams,
   findOwnedExamById,
+  publishOwnedDraftExam,
   updateOwnedDraftExam,
 } from '../repositories/lecturerExamRepository.js';
 
@@ -93,6 +94,20 @@ const parseExamId = (value) => {
   }
 
   return id;
+};
+
+const validatePublicationPayload = (payload) => {
+  if (payload === undefined) {
+    return;
+  }
+
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new HttpError(400, 'Request body must be an empty JSON object.');
+  }
+
+  if (Object.keys(payload).length > 0) {
+    throw new HttpError(400, 'Publication does not accept client-controlled fields.');
+  }
 };
 
 const requireExamType = async (examTypeId) => {
@@ -186,4 +201,10 @@ export async function removeLecturerExam(idValue, lecturerId) {
     requireDraft(latestExam);
     throw new HttpError(409, 'Exam could not be deleted.');
   }
+}
+
+export function publishLecturerExam(idValue, payload, lecturerId) {
+  const id = parseExamId(idValue);
+  validatePublicationPayload(payload);
+  return publishOwnedDraftExam(id, lecturerId);
 }

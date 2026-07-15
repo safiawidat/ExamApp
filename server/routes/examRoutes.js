@@ -5,6 +5,7 @@ import {
   getLecturerExamById,
   getLecturerExams,
   patchLecturerExam,
+  publishLecturerExam,
 } from '../controllers/lecturerExamController.js';
 import {
   createQuestion,
@@ -22,6 +23,7 @@ examRoutes.use(authenticate, authorize('lecturer'));
 examRoutes.get('/', getLecturerExams);
 examRoutes.post('/', createLecturerExam);
 examRoutes.get('/:id', getLecturerExamById);
+examRoutes.post('/:id/publish', publishLecturerExam);
 examRoutes.patch('/:id', patchLecturerExam);
 examRoutes.delete('/:id', destroyLecturerExam);
 examRoutes.get('/:examId/questions', getQuestions);

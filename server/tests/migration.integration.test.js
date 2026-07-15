@@ -14,9 +14,22 @@ const { Pool } = pg;
 
 const migration001Name = '001_milestone_2_exam_authoring.sql';
 const migration002Name = '002_question_types.sql';
-const migrationNames = [migration001Name, migration002Name];
+const migration003Name = '003_exam_submissions.sql';
+const migrationNames = [
+  migration001Name,
+  migration002Name,
+  migration003Name,
+];
 const migration001Sql = await readFile(
   new URL('../db/migrations/001_milestone_2_exam_authoring.sql', import.meta.url),
+  'utf8',
+);
+const migration002Sql = await readFile(
+  new URL('../db/migrations/002_question_types.sql', import.meta.url),
+  'utf8',
+);
+const migration003Sql = await readFile(
+  new URL('../db/migrations/003_exam_submissions.sql', import.meta.url),
   'utf8',
 );
 const expectedBootstrapRows = [
@@ -172,6 +185,153 @@ const insertQuestion = async (
   [examId, type, `Question ${position}`, 1, position, correctAnswer],
 );
 
+const prepareMigration003Database = async (databasePool) => {
+  await createUsersSchema(databasePool);
+  await databasePool.query(migration001Sql);
+  await databasePool.query(migration002Sql);
+
+  const users = await databasePool.query(`
+    INSERT INTO users (username, password_hash, role)
+    VALUES
+      ('migration_003_lecturer', 'test-only-hash', 'lecturer'),
+      ('migration_003_student_one', 'test-only-hash', 'student'),
+      ('migration_003_student_two', 'test-only-hash', 'student')
+    RETURNING id, username
+  `);
+  const userIds = Object.fromEntries(
+    users.rows.map((row) => [row.username, row.id]),
+  );
+  const examType = await databasePool.query(
+    `INSERT INTO exam_types (name, description, created_by)
+     VALUES ($1, $2, $3)
+     RETURNING id`,
+    ['Migration 003 Type', 'Migration test fixture', userIds.migration_003_lecturer],
+  );
+  const exams = await databasePool.query(
+    `INSERT INTO exams (
+       lecturer_id,
+       exam_type_id,
+       title,
+       status,
+       published_at
+     )
+     VALUES
+       ($1, $2, 'Migration 003 Exam A', 'published', CURRENT_TIMESTAMP),
+       ($1, $2, 'Migration 003 Exam B', 'published', CURRENT_TIMESTAMP)
+     RETURNING id, title`,
+    [userIds.migration_003_lecturer, examType.rows[0].id],
+  );
+  const examIds = Object.fromEntries(
+    exams.rows.map((row) => [row.title, row.id]),
+  );
+  const examAId = examIds['Migration 003 Exam A'];
+  const examBId = examIds['Migration 003 Exam B'];
+  const questionRows = [];
+
+  questionRows.push((await insertQuestion(databasePool, examAId, {
+    type: 'multiple_choice',
+    position: 1,
+  })).rows[0]);
+  questionRows.push((await insertQuestion(databasePool, examAId, {
+    type: 'true_false',
+    correctAnswer: 'true',
+    position: 2,
+  })).rows[0]);
+  questionRows.push((await insertQuestion(databasePool, examAId, {
+    type: 'short_answer',
+    correctAnswer: 'Reference answer',
+    position: 3,
+  })).rows[0]);
+  questionRows.push((await insertQuestion(databasePool, examAId, {
+    type: 'multiple_choice',
+    position: 4,
+  })).rows[0]);
+  questionRows.push((await insertQuestion(databasePool, examBId, {
+    type: 'multiple_choice',
+    position: 1,
+  })).rows[0]);
+
+  const [multipleChoice, trueFalse, shortAnswer, otherMultipleChoice, examBQuestion]
+    = questionRows;
+  const options = await databasePool.query(
+    `INSERT INTO question_options (question_id, text, position, is_correct)
+     VALUES
+       ($1, 'Exam A answer', 1, TRUE),
+       ($1, 'Exam A distractor', 2, FALSE),
+       ($2, 'Other question answer', 1, TRUE),
+       ($3, 'Exam B answer', 1, TRUE)
+     RETURNING id, question_id, text`,
+    [multipleChoice.id, otherMultipleChoice.id, examBQuestion.id],
+  );
+  const optionIds = Object.fromEntries(
+    options.rows.map((row) => [row.text, row.id]),
+  );
+
+  return {
+    examAId,
+    examBId,
+    lecturerId: userIds.migration_003_lecturer,
+    studentOneId: userIds.migration_003_student_one,
+    studentTwoId: userIds.migration_003_student_two,
+    questions: {
+      multipleChoice,
+      trueFalse,
+      shortAnswer,
+      otherMultipleChoice,
+      examBQuestion,
+    },
+    options: {
+      multipleChoice: optionIds['Exam A answer'],
+      multipleChoiceDistractor: optionIds['Exam A distractor'],
+      otherMultipleChoice: optionIds['Other question answer'],
+      examBQuestion: optionIds['Exam B answer'],
+    },
+  };
+};
+
+const insertSubmission = async (databasePool, examId, studentId) => {
+  const result = await databasePool.query(
+    `INSERT INTO exam_submissions (exam_id, student_id)
+     VALUES ($1, $2)
+     RETURNING id, exam_id, student_id, submitted_at`,
+    [examId, studentId],
+  );
+
+  return result.rows[0];
+};
+
+const insertAnswer = async (databasePool, {
+  submissionId,
+  examId,
+  questionId,
+  selectedOptionId = null,
+  booleanAnswer = null,
+  textAnswer = null,
+}) => databasePool.query(
+  `INSERT INTO submission_answers (
+     submission_id,
+     exam_id,
+     question_id,
+     selected_option_id,
+     boolean_answer,
+     text_answer
+   )
+   VALUES ($1, $2, $3, $4, $5, $6)
+   RETURNING *`,
+  [
+    submissionId,
+    examId,
+    questionId,
+    selectedOptionId,
+    booleanAnswer,
+    textAnswer,
+  ],
+);
+
+const expectPostgresError = async (promise, code) => {
+  await expect(promise).rejects.toMatchObject({ code });
+};
+
 const getQuestionConstraints = async (databasePool) => {
   const result = await databasePool.query(`
     SELECT
@@ -222,7 +382,11 @@ const expectNoMigrationArtifacts = async (databasePool) => {
       TO_REGCLASS('public.exam_types') AS exam_types,
       TO_REGCLASS('public.questions') AS questions,
       TO_REGCLASS('public.question_options') AS question_options,
-      TO_REGPROCEDURE('public.examapp_set_updated_at()') AS timestamp_function
+      TO_REGCLASS('public.exam_submissions') AS exam_submissions,
+      TO_REGCLASS('public.submission_answers') AS submission_answers,
+      TO_REGPROCEDURE('public.examapp_set_updated_at()') AS timestamp_function,
+      TO_REGPROCEDURE('public.examapp_validate_submission_answer()')
+        AS answer_validation_function
   `);
 
   expect(result.rows[0]).toEqual({
@@ -230,7 +394,10 @@ const expectNoMigrationArtifacts = async (databasePool) => {
     exam_types: null,
     questions: null,
     question_options: null,
+    exam_submissions: null,
+    submission_answers: null,
     timestamp_function: null,
+    answer_validation_function: null,
   });
 };
 
@@ -304,6 +471,7 @@ describe('Milestone 2 legacy exam migration', () => {
       expect(migration.rows).toEqual([
         { version: '001', name: migration001Name },
         { version: '002', name: migration002Name },
+        { version: '003', name: migration003Name },
       ]);
     });
   });
@@ -378,11 +546,15 @@ describe('Milestone 2 legacy exam migration', () => {
              'exams_set_updated_at',
              'questions_set_updated_at'
            )
-           AND NOT tgisinternal) AS timestamp_trigger_count
+           AND NOT tgisinternal) AS timestamp_trigger_count,
+          (SELECT COUNT(*)::INTEGER FROM pg_trigger
+           WHERE tgname = 'submission_answers_validate_answer'
+             AND NOT tgisinternal) AS answer_trigger_count
       `);
       expect(counts.rows[0]).toEqual({
-        migration_count: 2,
+        migration_count: 3,
         timestamp_trigger_count: 3,
+        answer_trigger_count: 1,
       });
     });
   });
@@ -409,13 +581,20 @@ describe('Milestone 2 legacy exam migration', () => {
           TO_REGCLASS('public.schema_migrations') AS schema_migrations,
           TO_REGCLASS('public.questions') AS questions,
           TO_REGCLASS('public.question_options') AS question_options,
-          TO_REGPROCEDURE('public.examapp_set_updated_at()') AS timestamp_function
+          TO_REGCLASS('public.exam_submissions') AS exam_submissions,
+          TO_REGCLASS('public.submission_answers') AS submission_answers,
+          TO_REGPROCEDURE('public.examapp_set_updated_at()') AS timestamp_function,
+          TO_REGPROCEDURE('public.examapp_validate_submission_answer()')
+            AS answer_validation_function
       `);
       expect(artifacts.rows[0]).toEqual({
         schema_migrations: null,
         questions: null,
         question_options: null,
+        exam_submissions: null,
+        submission_answers: null,
         timestamp_function: null,
+        answer_validation_function: null,
       });
       expect(await databasePool.query(
         `SELECT column_name
@@ -433,7 +612,7 @@ describe('Migration 002 question type constraints', () => {
       await prepareMigration002Database(databasePool);
 
       await expect(runMigrations({ databasePool })).resolves.toEqual({
-        applied: [migration002Name],
+        applied: [migration002Name, migration003Name],
         skipped: [migration001Name],
       });
 
@@ -453,7 +632,7 @@ describe('Migration 002 question type constraints', () => {
       });
 
       await expect(runMigrations({ databasePool })).resolves.toEqual({
-        applied: [migration002Name],
+        applied: [migration002Name, migration003Name],
         skipped: [migration001Name],
       });
 
@@ -702,12 +881,12 @@ describe('Migration 002 question type constraints', () => {
     });
   });
 
-  test('skips migration 002 idempotently after a successful rerun', async () => {
+  test('skips migrations 002 and 003 idempotently after a successful rerun', async () => {
     await withTemporaryDatabase(async (databasePool) => {
       await prepareMigration002Database(databasePool);
 
       expect(await runMigrations({ databasePool })).toEqual({
-        applied: [migration002Name],
+        applied: [migration002Name, migration003Name],
         skipped: [migration001Name],
       });
       expect(await runMigrations({ databasePool })).toEqual({
@@ -725,7 +904,7 @@ describe('Migration 002 question type constraints', () => {
     });
   });
 
-  test('runs migrations 001 and 002 in order on a fresh database', async () => {
+  test('runs migrations 001, 002, and 003 in order on a fresh database', async () => {
     await withTemporaryDatabase(async (databasePool) => {
       await createUsersSchema(databasePool);
 
@@ -740,8 +919,441 @@ describe('Migration 002 question type constraints', () => {
       expect(migrations.rows).toEqual([
         { version: '001', name: migration001Name },
         { version: '002', name: migration002Name },
+        { version: '003', name: migration003Name },
       ]);
       expect(await getQuestionConstraints(databasePool)).toHaveLength(2);
+    });
+  });
+});
+
+describe('Migration 003 exam submissions', () => {
+  test('requires the prerequisite tables before installation', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      await databasePool.query(`
+        CREATE TABLE schema_migrations (
+          version VARCHAR(20) PRIMARY KEY,
+          name VARCHAR(255) NOT NULL UNIQUE,
+          applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      await expect(databasePool.query(migration003Sql)).rejects.toThrow(
+        /requires the existing public\.users table/i,
+      );
+
+      const artifacts = await databasePool.query(`
+        SELECT
+          TO_REGCLASS('public.exam_submissions') AS exam_submissions,
+          TO_REGCLASS('public.submission_answers') AS submission_answers
+      `);
+      expect(artifacts.rows[0]).toEqual({
+        exam_submissions: null,
+        submission_answers: null,
+      });
+    });
+  });
+
+  test('installs tables, metadata, constraints, indexes, and trigger artifacts', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      await prepareMigration003Database(databasePool);
+
+      await expect(runMigrations({ databasePool })).resolves.toEqual({
+        applied: [migration003Name],
+        skipped: [migration001Name, migration002Name],
+      });
+
+      const migrations = await databasePool.query(
+        'SELECT version, name FROM schema_migrations ORDER BY version',
+      );
+      expect(migrations.rows).toEqual([
+        { version: '001', name: migration001Name },
+        { version: '002', name: migration002Name },
+        { version: '003', name: migration003Name },
+      ]);
+
+      const columns = await databasePool.query(`
+        SELECT table_name, column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name IN ('exam_submissions', 'submission_answers')
+        ORDER BY table_name, ordinal_position
+      `);
+      expect(columns.rows).toEqual([
+        { table_name: 'exam_submissions', column_name: 'id' },
+        { table_name: 'exam_submissions', column_name: 'exam_id' },
+        { table_name: 'exam_submissions', column_name: 'student_id' },
+        { table_name: 'exam_submissions', column_name: 'submitted_at' },
+        { table_name: 'submission_answers', column_name: 'submission_id' },
+        { table_name: 'submission_answers', column_name: 'exam_id' },
+        { table_name: 'submission_answers', column_name: 'question_id' },
+        { table_name: 'submission_answers', column_name: 'selected_option_id' },
+        { table_name: 'submission_answers', column_name: 'boolean_answer' },
+        { table_name: 'submission_answers', column_name: 'text_answer' },
+      ]);
+
+      const constraints = await databasePool.query(`
+        SELECT conname
+        FROM pg_constraint
+        WHERE conname IN (
+          'questions_id_exam_id_unique',
+          'question_options_id_question_id_unique',
+          'exam_submissions_exam_id_fkey',
+          'exam_submissions_student_id_fkey',
+          'exam_submissions_exam_student_unique',
+          'exam_submissions_id_exam_id_unique',
+          'submission_answers_pkey',
+          'submission_answers_submission_exam_fkey',
+          'submission_answers_question_exam_fkey',
+          'submission_answers_option_question_fkey',
+          'submission_answers_one_value_check',
+          'submission_answers_text_valid_check'
+        )
+        ORDER BY conname
+      `);
+      expect(constraints.rows.map((row) => row.conname)).toEqual([
+        'exam_submissions_exam_id_fkey',
+        'exam_submissions_exam_student_unique',
+        'exam_submissions_id_exam_id_unique',
+        'exam_submissions_student_id_fkey',
+        'question_options_id_question_id_unique',
+        'questions_id_exam_id_unique',
+        'submission_answers_one_value_check',
+        'submission_answers_option_question_fkey',
+        'submission_answers_pkey',
+        'submission_answers_question_exam_fkey',
+        'submission_answers_submission_exam_fkey',
+        'submission_answers_text_valid_check',
+      ]);
+
+      const artifacts = await databasePool.query(`
+        SELECT
+          TO_REGCLASS('public.exam_submissions') AS exam_submissions,
+          TO_REGCLASS('public.submission_answers') AS submission_answers,
+          TO_REGCLASS('public.exam_submissions_student_submitted_at_idx')
+            AS submissions_index,
+          TO_REGCLASS('public.submission_answers_question_id_idx')
+            AS answers_index,
+          TO_REGPROCEDURE('public.examapp_validate_submission_answer()')
+            AS answer_validation_function,
+          EXISTS (
+            SELECT 1
+            FROM pg_trigger
+            WHERE tgname = 'submission_answers_validate_answer'
+              AND NOT tgisinternal
+          ) AS answer_validation_trigger
+      `);
+      expect(artifacts.rows[0]).toEqual({
+        exam_submissions: 'exam_submissions',
+        submission_answers: 'submission_answers',
+        submissions_index: 'exam_submissions_student_submitted_at_idx',
+        answers_index: 'submission_answers_question_id_idx',
+        answer_validation_function: 'examapp_validate_submission_answer()',
+        answer_validation_trigger: true,
+      });
+    });
+  });
+
+  test('enforces one final submission per student and exam', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      const fixture = await prepareMigration003Database(databasePool);
+      await runMigrations({ databasePool });
+
+      await expect(insertSubmission(
+        databasePool,
+        fixture.examAId,
+        fixture.studentOneId,
+      )).resolves.toMatchObject({
+        exam_id: fixture.examAId,
+        student_id: fixture.studentOneId,
+      });
+      await expectPostgresError(
+        insertSubmission(databasePool, fixture.examAId, fixture.studentOneId),
+        '23505',
+      );
+      await expect(insertSubmission(
+        databasePool,
+        fixture.examAId,
+        fixture.studentTwoId,
+      )).resolves.toMatchObject({ student_id: fixture.studentTwoId });
+      await expect(insertSubmission(
+        databasePool,
+        fixture.examBId,
+        fixture.studentOneId,
+      )).resolves.toMatchObject({ exam_id: fixture.examBId });
+
+      const count = await databasePool.query(
+        'SELECT COUNT(*)::INTEGER AS count FROM exam_submissions',
+      );
+      expect(count.rows[0].count).toBe(3);
+    });
+  });
+
+  test('rejects invalid submission, question, and option foreign keys', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      const fixture = await prepareMigration003Database(databasePool);
+      await runMigrations({ databasePool });
+      const submission = await insertSubmission(
+        databasePool,
+        fixture.examAId,
+        fixture.studentOneId,
+      );
+
+      await expectPostgresError(
+        insertSubmission(databasePool, 2147483647, fixture.studentTwoId),
+        '23503',
+      );
+      await expectPostgresError(
+        insertSubmission(databasePool, fixture.examBId, 2147483647),
+        '23503',
+      );
+      await expectPostgresError(insertAnswer(databasePool, {
+        submissionId: 2147483647,
+        examId: fixture.examAId,
+        questionId: fixture.questions.multipleChoice.id,
+      }), '23503');
+      await expectPostgresError(insertAnswer(databasePool, {
+        submissionId: submission.id,
+        examId: fixture.examAId,
+        questionId: fixture.questions.examBQuestion.id,
+      }), '23503');
+      await expectPostgresError(insertAnswer(databasePool, {
+        submissionId: submission.id,
+        examId: fixture.examAId,
+        questionId: fixture.questions.multipleChoice.id,
+        selectedOptionId: fixture.options.otherMultipleChoice,
+      }), '23503');
+    });
+  });
+
+  test('stores explicit unanswered rows for every public question type', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      const fixture = await prepareMigration003Database(databasePool);
+      await runMigrations({ databasePool });
+      const submission = await insertSubmission(
+        databasePool,
+        fixture.examAId,
+        fixture.studentOneId,
+      );
+
+      for (const question of [
+        fixture.questions.multipleChoice,
+        fixture.questions.trueFalse,
+        fixture.questions.shortAnswer,
+      ]) {
+        await expect(insertAnswer(databasePool, {
+          submissionId: submission.id,
+          examId: fixture.examAId,
+          questionId: question.id,
+        })).resolves.toMatchObject({ rowCount: 1 });
+      }
+
+      const answers = await databasePool.query(`
+        SELECT selected_option_id, boolean_answer, text_answer
+        FROM submission_answers
+        ORDER BY question_id
+      `);
+      expect(answers.rows).toHaveLength(3);
+      expect(answers.rows).toEqual(answers.rows.map(() => ({
+        selected_option_id: null,
+        boolean_answer: null,
+        text_answer: null,
+      })));
+    });
+  });
+
+  test('accepts valid answered rows for every public question type', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      const fixture = await prepareMigration003Database(databasePool);
+      await runMigrations({ databasePool });
+      const submission = await insertSubmission(
+        databasePool,
+        fixture.examAId,
+        fixture.studentOneId,
+      );
+
+      await expect(insertAnswer(databasePool, {
+        submissionId: submission.id,
+        examId: fixture.examAId,
+        questionId: fixture.questions.multipleChoice.id,
+        selectedOptionId: fixture.options.multipleChoice,
+      })).resolves.toMatchObject({ rowCount: 1 });
+      await expect(insertAnswer(databasePool, {
+        submissionId: submission.id,
+        examId: fixture.examAId,
+        questionId: fixture.questions.trueFalse.id,
+        booleanAnswer: false,
+      })).resolves.toMatchObject({ rowCount: 1 });
+      await expect(insertAnswer(databasePool, {
+        submissionId: submission.id,
+        examId: fixture.examAId,
+        questionId: fixture.questions.shortAnswer.id,
+        textAnswer: 'A trimmed response',
+      })).resolves.toMatchObject({ rowCount: 1 });
+    });
+  });
+
+  test('rejects multiple values, invalid text, and type-mismatched values', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      const fixture = await prepareMigration003Database(databasePool);
+      await runMigrations({ databasePool });
+      const submission = await insertSubmission(
+        databasePool,
+        fixture.examAId,
+        fixture.studentOneId,
+      );
+      const base = {
+        submissionId: submission.id,
+        examId: fixture.examAId,
+      };
+
+      await expectPostgresError(insertAnswer(databasePool, {
+        ...base,
+        questionId: fixture.questions.multipleChoice.id,
+        selectedOptionId: fixture.options.multipleChoice,
+        booleanAnswer: true,
+      }), '23514');
+
+      for (const textAnswer of ['', '   ', ' untrimmed', 'untrimmed ']) {
+        await expectPostgresError(insertAnswer(databasePool, {
+          ...base,
+          questionId: fixture.questions.shortAnswer.id,
+          textAnswer,
+        }), '23514');
+      }
+
+      await expectPostgresError(insertAnswer(databasePool, {
+        ...base,
+        questionId: fixture.questions.multipleChoice.id,
+        booleanAnswer: true,
+      }), '23514');
+      await expectPostgresError(insertAnswer(databasePool, {
+        ...base,
+        questionId: fixture.questions.trueFalse.id,
+        textAnswer: 'wrong type',
+      }), '23514');
+      await expectPostgresError(insertAnswer(databasePool, {
+        ...base,
+        questionId: fixture.questions.shortAnswer.id,
+        selectedOptionId: fixture.options.multipleChoice,
+      }), '23514');
+    });
+  });
+
+  test('allows only one answer row per submission question', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      const fixture = await prepareMigration003Database(databasePool);
+      await runMigrations({ databasePool });
+      const submission = await insertSubmission(
+        databasePool,
+        fixture.examAId,
+        fixture.studentOneId,
+      );
+      const answer = {
+        submissionId: submission.id,
+        examId: fixture.examAId,
+        questionId: fixture.questions.multipleChoice.id,
+      };
+
+      await insertAnswer(databasePool, answer);
+      await expectPostgresError(insertAnswer(databasePool, {
+        ...answer,
+        selectedOptionId: fixture.options.multipleChoice,
+      }), '23505');
+    });
+  });
+
+  test('prevents answers from crossing exam ownership', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      const fixture = await prepareMigration003Database(databasePool);
+      await runMigrations({ databasePool });
+      const submission = await insertSubmission(
+        databasePool,
+        fixture.examAId,
+        fixture.studentOneId,
+      );
+
+      await expectPostgresError(insertAnswer(databasePool, {
+        submissionId: submission.id,
+        examId: fixture.examAId,
+        questionId: fixture.questions.examBQuestion.id,
+      }), '23503');
+    });
+  });
+
+  test('prevents selecting an option owned by another question', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      const fixture = await prepareMigration003Database(databasePool);
+      await runMigrations({ databasePool });
+      const submission = await insertSubmission(
+        databasePool,
+        fixture.examAId,
+        fixture.studentOneId,
+      );
+
+      await expectPostgresError(insertAnswer(databasePool, {
+        submissionId: submission.id,
+        examId: fixture.examAId,
+        questionId: fixture.questions.multipleChoice.id,
+        selectedOptionId: fixture.options.otherMultipleChoice,
+      }), '23503');
+    });
+  });
+
+  test('cascades answer deletion from a deleted submission', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      const fixture = await prepareMigration003Database(databasePool);
+      await runMigrations({ databasePool });
+      const submission = await insertSubmission(
+        databasePool,
+        fixture.examAId,
+        fixture.studentOneId,
+      );
+      await insertAnswer(databasePool, {
+        submissionId: submission.id,
+        examId: fixture.examAId,
+        questionId: fixture.questions.multipleChoice.id,
+      });
+
+      await databasePool.query(
+        'DELETE FROM exam_submissions WHERE id = $1',
+        [submission.id],
+      );
+      const count = await databasePool.query(
+        'SELECT COUNT(*)::INTEGER AS count FROM submission_answers',
+      );
+      expect(count.rows[0].count).toBe(0);
+    });
+  });
+
+  test('skips all three migrations idempotently after migration 003 succeeds', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      await prepareMigration003Database(databasePool);
+
+      expect(await runMigrations({ databasePool })).toEqual({
+        applied: [migration003Name],
+        skipped: [migration001Name, migration002Name],
+      });
+      expect(await runMigrations({ databasePool })).toEqual({
+        applied: [],
+        skipped: migrationNames,
+      });
+
+      const artifacts = await databasePool.query(`
+        SELECT
+          (SELECT COUNT(*)::INTEGER FROM schema_migrations)
+            AS migration_count,
+          (SELECT COUNT(*)::INTEGER FROM pg_trigger
+           WHERE tgname = 'submission_answers_validate_answer'
+             AND NOT tgisinternal) AS trigger_count,
+          (SELECT COUNT(*)::INTEGER FROM pg_proc
+           WHERE oid = TO_REGPROCEDURE('public.examapp_validate_submission_answer()'))
+            AS function_count
+      `);
+      expect(artifacts.rows[0]).toEqual({
+        migration_count: 3,
+        trigger_count: 1,
+        function_count: 1,
+      });
     });
   });
 });

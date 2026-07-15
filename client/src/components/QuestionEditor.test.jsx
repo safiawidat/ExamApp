@@ -1,5 +1,6 @@
 import {
   act,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -304,6 +305,127 @@ describe('question creation and updates', () => {
     );
     expect(screen.getByLabelText('Prompt')).toHaveValue('Still a draft?');
     expect(screen.getByRole('heading', { name: 'Questions (0)' })).toBeInTheDocument();
+  });
+
+  test('locks edit, delete, and reorder controls and blocks rapid create/delete overlap', async () => {
+    const request = deferred();
+    const created = {
+      ...trueFalseQuestion,
+      id: 104,
+      position: 4,
+      prompt: 'Pending create',
+    };
+    createQuestion.mockReturnValue(request.promise);
+    const user = userEvent.setup();
+    const { onQuestionCountChange } = await loadEditor(allQuestions);
+
+    await user.click(screen.getByRole('button', { name: 'Delete question 1' }));
+    await user.selectOptions(screen.getByLabelText('Question type'), 'true_false');
+    await user.type(screen.getByLabelText('Prompt'), created.prompt);
+    const createForm = screen.getByRole('button', { name: 'Add question' }).closest('form');
+    fireEvent.submit(createForm);
+    fireEvent.submit(createForm);
+
+    const savingButton = screen.getByRole('button', { name: /Saving/ });
+    expect(savingButton).toBeDisabled();
+    expect(screen.getByLabelText('Question type')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Edit question 2' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Delete question 2' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Move question 2 up' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Confirm delete' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
+    expect(createQuestion).toHaveBeenCalledTimes(1);
+    expect(deleteQuestion).not.toHaveBeenCalled();
+
+    await act(async () => {
+      request.resolve(created);
+    });
+
+    expect(await screen.findByRole('heading', { name: created.prompt })).toBeInTheDocument();
+    expect(onQuestionCountChange).toHaveBeenLastCalledWith(4);
+  });
+
+  test('disables create and other mutation controls while an edit is pending', async () => {
+    const request = deferred();
+    updateQuestion.mockReturnValue(request.promise);
+    const user = userEvent.setup();
+    await loadEditor(allQuestions);
+
+    await user.click(screen.getByRole('button', { name: 'Edit question 1' }));
+    await user.click(screen.getByRole('button', { name: 'Save question' }));
+
+    expect(screen.getByRole('button', { name: 'Add question' })).toBeDisabled();
+    expect(screen.getAllByLabelText('Question type').every((control) => control.disabled)).toBe(true);
+    expect(screen.getByRole('button', { name: 'Delete question 2' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Move question 2 down' })).toBeDisabled();
+
+    await act(async () => {
+      request.resolve(multipleChoiceQuestion);
+    });
+
+    expect(await screen.findByRole('heading', { name: multipleChoiceQuestion.prompt }))
+      .toBeInTheDocument();
+  });
+
+  test('preserves a question loaded during an in-flight create and reports the final count', async () => {
+    const request = deferred();
+    const created = {
+      ...shortAnswerQuestion,
+      id: 104,
+      position: 3,
+      prompt: 'Created after refresh',
+    };
+    createQuestion.mockReturnValue(request.promise);
+    const user = userEvent.setup();
+    const { rerender } = await loadEditor([multipleChoiceQuestion]);
+
+    await user.selectOptions(screen.getByLabelText('Question type'), 'true_false');
+    await user.type(screen.getByLabelText('Prompt'), created.prompt);
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+
+    listQuestions.mockResolvedValueOnce([multipleChoiceQuestion, trueFalseQuestion]);
+    const refreshedCount = vi.fn();
+    rerender(
+      <QuestionEditor
+        exam={exam}
+        onBack={vi.fn()}
+        onQuestionCountChange={refreshedCount}
+      />,
+    );
+    expect(await screen.findByRole('heading', { name: trueFalseQuestion.prompt }))
+      .toBeInTheDocument();
+
+    await act(async () => {
+      request.resolve(created);
+    });
+
+    expect(await screen.findByRole('heading', { name: created.prompt })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: multipleChoiceQuestion.prompt }))
+      .toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: trueFalseQuestion.prompt }))
+      .toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Questions (3)' })).toBeInTheDocument();
+    expect(refreshedCount).toHaveBeenLastCalledWith(3);
+  });
+
+  test('keeps the stored question unchanged when an edit fails', async () => {
+    updateQuestion.mockRejectedValue(new ApiError(409, 'Question update was rejected.'));
+    const user = userEvent.setup();
+    await loadEditor([multipleChoiceQuestion]);
+
+    await user.click(screen.getByRole('button', { name: 'Edit question 1' }));
+    const editPrompt = screen.getAllByLabelText('Prompt')[1];
+    await user.clear(editPrompt);
+    await user.type(editPrompt, 'Changed only in the failed form');
+    await user.click(screen.getByRole('button', { name: 'Save question' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Question update was rejected.');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('heading', { name: multipleChoiceQuestion.prompt }))
+      .toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Changed only in the failed form' }))
+      .not.toBeInTheDocument();
   });
 });
 

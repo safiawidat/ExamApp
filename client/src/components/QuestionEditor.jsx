@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   createQuestion,
   deleteQuestion,
@@ -51,6 +51,7 @@ const QuestionEditor = ({ exam, onBack, onQuestionCountChange }) => {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [pendingAction, setPendingAction] = useState('');
   const [createFormVersion, setCreateFormVersion] = useState(0);
+  const mutationLockRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -61,7 +62,6 @@ const QuestionEditor = ({ exam, onBack, onQuestionCountChange }) => {
           const ordered = orderQuestions(loadedQuestions);
           setQuestions(ordered);
           setLoadError('');
-          onQuestionCountChange?.(ordered.length);
         }
       })
       .catch((error) => {
@@ -80,6 +80,12 @@ const QuestionEditor = ({ exam, onBack, onQuestionCountChange }) => {
     };
   }, [exam.id, onQuestionCountChange]);
 
+  useEffect(() => {
+    if (!isLoading && !loadError) {
+      onQuestionCountChange?.(questions.length);
+    }
+  }, [isLoading, loadError, onQuestionCountChange, questions.length]);
+
   const retryLoad = async () => {
     setIsLoading(true);
     setLoadError('');
@@ -87,7 +93,6 @@ const QuestionEditor = ({ exam, onBack, onQuestionCountChange }) => {
     try {
       const loadedQuestions = orderQuestions(await listQuestions(exam.id));
       setQuestions(loadedQuestions);
-      onQuestionCountChange?.(loadedQuestions.length);
     } catch (error) {
       setLoadError(safeApiMessage(error, 'Unable to load questions.'));
     } finally {
@@ -95,56 +100,76 @@ const QuestionEditor = ({ exam, onBack, onQuestionCountChange }) => {
     }
   };
 
+  const beginMutation = (action) => {
+    if (mutationLockRef.current) {
+      return false;
+    }
+
+    mutationLockRef.current = true;
+    setPendingAction(action);
+    setActionError('');
+    setSuccessMessage('');
+    return true;
+  };
+
+  const finishMutation = () => {
+    mutationLockRef.current = false;
+    setPendingAction('');
+  };
+
   const handleCreate = async (payload) => {
-    const created = await createQuestion(exam.id, payload);
-    const nextQuestions = orderQuestions([...questions, created]);
-    setQuestions(nextQuestions);
-    setCreateFormVersion((version) => version + 1);
-    setSuccessMessage('Question was added.');
-    setActionError('');
-    onQuestionCountChange?.(nextQuestions.length);
-  };
-
-  const handleUpdate = async (questionId, payload) => {
-    const updated = await updateQuestion(exam.id, questionId, payload);
-    setQuestions((current) => orderQuestions(current.map((question) => (
-      question.id === updated.id ? updated : question
-    ))));
-    setEditingId(null);
-    setSuccessMessage('Question was updated.');
-    setActionError('');
-  };
-
-  const handleDelete = async (question) => {
-    if (pendingAction) {
+    if (!beginMutation('create')) {
       return;
     }
 
-    setPendingAction(`delete-${question.id}`);
-    setActionError('');
+    try {
+      const created = await createQuestion(exam.id, payload);
+      setQuestions((current) => orderQuestions([...current, created]));
+      setCreateFormVersion((version) => version + 1);
+      setSuccessMessage('Question was added.');
+    } finally {
+      finishMutation();
+    }
+  };
+
+  const handleUpdate = async (questionId, payload) => {
+    if (!beginMutation(`update-${questionId}`)) {
+      return;
+    }
+
+    try {
+      const updated = await updateQuestion(exam.id, questionId, payload);
+      setQuestions((current) => orderQuestions(current.map((question) => (
+        question.id === updated.id ? updated : question
+      ))));
+      setEditingId(null);
+      setSuccessMessage('Question was updated.');
+    } finally {
+      finishMutation();
+    }
+  };
+
+  const handleDelete = async (question) => {
+    if (!beginMutation(`delete-${question.id}`)) {
+      return;
+    }
 
     try {
       await deleteQuestion(exam.id, question.id);
-      const nextQuestions = questions
-        .filter((candidate) => candidate.id !== question.id)
-        .map((candidate, index) => ({ ...candidate, position: index + 1 }));
-      setQuestions(nextQuestions);
+      setQuestions((current) => orderQuestions(current
+        .filter((candidate) => candidate.id !== question.id))
+        .map((candidate, index) => ({ ...candidate, position: index + 1 })));
       setConfirmDeleteId(null);
       setEditingId(null);
       setSuccessMessage('Question was deleted.');
-      onQuestionCountChange?.(nextQuestions.length);
     } catch (error) {
       setActionError(safeApiMessage(error, 'Unable to delete the question.'));
     } finally {
-      setPendingAction('');
+      finishMutation();
     }
   };
 
   const moveQuestion = async (index, direction) => {
-    if (pendingAction) {
-      return;
-    }
-
     const targetIndex = index + direction;
 
     if (targetIndex < 0 || targetIndex >= questions.length) {
@@ -154,8 +179,10 @@ const QuestionEditor = ({ exam, onBack, onQuestionCountChange }) => {
     const requested = [...questions];
     [requested[index], requested[targetIndex]] = [requested[targetIndex], requested[index]];
     const questionIds = requested.map((question) => question.id);
-    setPendingAction('reorder');
-    setActionError('');
+
+    if (!beginMutation('reorder')) {
+      return;
+    }
 
     try {
       const reordered = orderQuestions(await reorderQuestions(exam.id, questionIds));
@@ -164,7 +191,7 @@ const QuestionEditor = ({ exam, onBack, onQuestionCountChange }) => {
     } catch (error) {
       setActionError(safeApiMessage(error, 'Unable to reorder questions.'));
     } finally {
-      setPendingAction('');
+      finishMutation();
     }
   };
 
@@ -205,6 +232,7 @@ const QuestionEditor = ({ exam, onBack, onQuestionCountChange }) => {
               <QuestionForm
                 key={`create-${createFormVersion}`}
                 onSubmit={handleCreate}
+                disabled={Boolean(pendingAction)}
               />
             </div>
           </section>
@@ -227,6 +255,7 @@ const QuestionEditor = ({ exam, onBack, onQuestionCountChange }) => {
                           question={question}
                           onSubmit={(payload) => handleUpdate(question.id, payload)}
                           onCancel={() => setEditingId(null)}
+                          disabled={Boolean(pendingAction)}
                         />
                       ) : (
                         <>

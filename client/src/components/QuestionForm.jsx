@@ -25,7 +25,7 @@ const initialValues = (question) => ({
     : '',
 });
 
-const QuestionForm = ({ question = null, onSubmit, onCancel }) => {
+const QuestionForm = ({ question = null, onSubmit, onCancel, disabled = false }) => {
   const formId = useId();
   const initial = initialValues(question);
   const [questionType, setQuestionType] = useState(initial.questionType);
@@ -37,6 +37,7 @@ const QuestionForm = ({ question = null, onSubmit, onCancel }) => {
   const [pendingType, setPendingType] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  const isDisabled = disabled || isSaving;
 
   const applyType = (nextType) => {
     setQuestionType(nextType);
@@ -157,7 +158,7 @@ const QuestionForm = ({ question = null, onSubmit, onCancel }) => {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (isSaving || pendingType) {
+    if (isDisabled || pendingType) {
       return;
     }
 
@@ -192,7 +193,7 @@ const QuestionForm = ({ question = null, onSubmit, onCancel }) => {
             className="form-select"
             value={questionType}
             onChange={handleTypeChange}
-            disabled={isSaving}
+            disabled={isDisabled}
           >
             <option value="multiple_choice">Multiple choice</option>
             <option value="true_false">True / false</option>
@@ -210,7 +211,7 @@ const QuestionForm = ({ question = null, onSubmit, onCancel }) => {
             step="1"
             value={points}
             onChange={(event) => setPoints(event.target.value)}
-            disabled={isSaving}
+            disabled={isDisabled}
           />
         </div>
         <div className="col-12">
@@ -220,7 +221,7 @@ const QuestionForm = ({ question = null, onSubmit, onCancel }) => {
             className="form-control"
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
-            disabled={isSaving}
+            disabled={isDisabled}
             rows="3"
           />
         </div>
@@ -234,6 +235,7 @@ const QuestionForm = ({ question = null, onSubmit, onCancel }) => {
               className="btn btn-sm btn-warning"
               type="button"
               onClick={() => applyType(pendingType)}
+              disabled={isDisabled}
             >
               Confirm type change
             </button>
@@ -241,6 +243,7 @@ const QuestionForm = ({ question = null, onSubmit, onCancel }) => {
               className="btn btn-sm btn-outline-secondary"
               type="button"
               onClick={() => setPendingType('')}
+              disabled={isDisabled}
             >
               Keep current type
             </button>
@@ -262,7 +265,7 @@ const QuestionForm = ({ question = null, onSubmit, onCancel }) => {
                     checked={option.is_correct}
                     onChange={() => markCorrect(index)}
                     aria-label={`Mark option ${index + 1} correct`}
-                    disabled={isSaving}
+                    disabled={isDisabled}
                   />
                 </span>
                 <label
@@ -276,14 +279,14 @@ const QuestionForm = ({ question = null, onSubmit, onCancel }) => {
                   className="form-control"
                   value={option.text}
                   onChange={(event) => updateOption(index, event.target.value)}
-                  disabled={isSaving}
+                  disabled={isDisabled}
                   aria-label={`Option ${index + 1}`}
                 />
                 <button
                   className="btn btn-outline-danger"
                   type="button"
                   onClick={() => removeOption(index)}
-                  disabled={isSaving || options.length <= 2}
+                  disabled={isDisabled || options.length <= 2}
                   aria-label={`Remove option ${index + 1}`}
                 >
                   Remove
@@ -298,7 +301,7 @@ const QuestionForm = ({ question = null, onSubmit, onCancel }) => {
               ...current,
               { text: '', is_correct: false },
             ])}
-            disabled={isSaving}
+            disabled={isDisabled}
           >
             Add option
           </button>
@@ -315,7 +318,7 @@ const QuestionForm = ({ question = null, onSubmit, onCancel }) => {
             className="form-select"
             value={String(correctAnswer)}
             onChange={(event) => setCorrectAnswer(event.target.value === 'true')}
-            disabled={isSaving}
+            disabled={isDisabled}
           >
             <option value="true">True</option>
             <option value="false">False</option>
@@ -333,7 +336,7 @@ const QuestionForm = ({ question = null, onSubmit, onCancel }) => {
             className="form-control"
             value={referenceAnswer}
             onChange={(event) => setReferenceAnswer(event.target.value)}
-            disabled={isSaving}
+            disabled={isDisabled}
             rows="2"
           />
         </div>
@@ -342,7 +345,7 @@ const QuestionForm = ({ question = null, onSubmit, onCancel }) => {
       {error && <div className="alert alert-danger mt-3" role="alert">{error}</div>}
 
       <div className="d-flex gap-2 mt-3">
-        <button className="btn btn-primary" type="submit" disabled={isSaving || Boolean(pendingType)}>
+        <button className="btn btn-primary" type="submit" disabled={isDisabled || Boolean(pendingType)}>
           {isSaving ? 'Saving…' : (question ? 'Save question' : 'Add question')}
         </button>
         {onCancel && (
@@ -350,7 +353,7 @@ const QuestionForm = ({ question = null, onSubmit, onCancel }) => {
             className="btn btn-outline-secondary"
             type="button"
             onClick={onCancel}
-            disabled={isSaving}
+            disabled={isDisabled}
           >
             Cancel
           </button>

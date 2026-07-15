@@ -345,4 +345,19 @@ describe('question form', () => {
     });
     expect(screen.getByRole('button', { name: 'Save question' })).toBeEnabled();
   });
+
+  test('respects an external mutation lock without submitting', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<QuestionForm question={trueFalseQuestion} onSubmit={onSubmit} disabled />);
+
+    expect(screen.getByLabelText('Question type')).toBeDisabled();
+    expect(screen.getByLabelText('Prompt')).toBeDisabled();
+    expect(screen.getByLabelText('Points')).toBeDisabled();
+    expect(screen.getByLabelText('Correct answer')).toBeDisabled();
+    const saveButton = screen.getByRole('button', { name: 'Save question' });
+    expect(saveButton).toBeDisabled();
+    await user.click(saveButton);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
 });

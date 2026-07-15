@@ -9,6 +9,7 @@ import {
   createLecturerExam,
   deleteLecturerExam,
   listLecturerExams,
+  publishLecturerExam,
   updateLecturerExam,
 } from '../api/lecturerExamService';
 import ExamManager from './ExamManager';
@@ -121,6 +122,15 @@ const TeacherDashboard = ({ currentUser, onOpenQuestionEditor }) => {
     }
   };
 
+  const handlePublishExam = async (examId) => {
+    const published = await publishLecturerExam(examId);
+    setExams((current) => current.map((exam) => (
+      exam.id === examId ? published : exam
+    )));
+    setSuccessMessage(`Exam “${published.title}” was published.`);
+    return published;
+  };
+
   const handleOpenQuestions = (exam) => {
     if (onOpenQuestionEditor) {
       onOpenQuestionEditor(exam);
@@ -200,6 +210,7 @@ const TeacherDashboard = ({ currentUser, onOpenQuestionEditor }) => {
               onCreate={handleCreateExam}
               onUpdate={handleUpdateExam}
               onDelete={handleDeleteExam}
+              onPublish={handlePublishExam}
               onOpenQuestions={handleOpenQuestions}
             />
           </div>

@@ -77,12 +77,14 @@ const ExamManager = ({
   onCreate,
   onUpdate,
   onDelete,
+  onPublish,
   onOpenQuestions,
 }) => {
   const [createForm, setCreateForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(emptyForm);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [confirmPublishId, setConfirmPublishId] = useState(null);
   const [pendingAction, setPendingAction] = useState('');
   const [error, setError] = useState('');
 
@@ -141,6 +143,7 @@ const ExamManager = ({
       examTypeId: String(exam.exam_type_id),
     });
     setConfirmDeleteId(null);
+    setConfirmPublishId(null);
     setError('');
   };
 
@@ -184,6 +187,24 @@ const ExamManager = ({
     }
   };
 
+  const handlePublish = async (exam) => {
+    if (pendingAction) {
+      return;
+    }
+
+    setPendingAction(`publish-${exam.id}`);
+    setError('');
+
+    try {
+      await onPublish(exam.id);
+      setConfirmPublishId(null);
+    } catch (requestError) {
+      setError(safeApiMessage(requestError, 'Unable to publish the exam.'));
+    } finally {
+      setPendingAction('');
+    }
+  };
+
   return (
     <section className="card shadow-sm" aria-labelledby="exams-heading">
       <div className="card-header bg-dark text-white">
@@ -218,7 +239,10 @@ const ExamManager = ({
             {exams.map((exam) => {
               const isEditing = editingId === exam.id;
               const isConfirmingDelete = confirmDeleteId === exam.id;
+              const isConfirmingPublish = confirmPublishId === exam.id;
               const isDraft = exam.status === 'draft';
+              const hasQuestions = exam.question_count > 0;
+              const isPublishing = pendingAction === `publish-${exam.id}`;
 
               return (
                 <article className="border rounded p-3" key={exam.id}>
@@ -275,9 +299,24 @@ const ExamManager = ({
                         {isDraft && (
                           <div className="d-flex flex-wrap justify-content-end gap-2">
                             <button
+                              className="btn btn-sm btn-outline-success"
+                              type="button"
+                              onClick={() => {
+                                setConfirmPublishId(exam.id);
+                                setConfirmDeleteId(null);
+                                setEditingId(null);
+                                setError('');
+                              }}
+                              disabled={Boolean(pendingAction) || !hasQuestions}
+                              aria-label={`Publish ${exam.title}`}
+                            >
+                              Publish
+                            </button>
+                            <button
                               className="btn btn-sm btn-outline-primary"
                               type="button"
                               onClick={() => onOpenQuestions(exam)}
+                              disabled={Boolean(pendingAction)}
                               aria-label={`Manage questions for ${exam.title}`}
                             >
                               Manage questions
@@ -286,6 +325,7 @@ const ExamManager = ({
                               className="btn btn-sm btn-outline-secondary"
                               type="button"
                               onClick={() => beginEdit(exam)}
+                              disabled={Boolean(pendingAction)}
                               aria-label={`Edit ${exam.title}`}
                             >
                               Edit
@@ -295,8 +335,10 @@ const ExamManager = ({
                               type="button"
                               onClick={() => {
                                 setConfirmDeleteId(exam.id);
+                                setConfirmPublishId(null);
                                 setEditingId(null);
                               }}
+                              disabled={Boolean(pendingAction)}
                               aria-label={`Delete ${exam.title}`}
                             >
                               Delete
@@ -304,10 +346,41 @@ const ExamManager = ({
                           </div>
                         )}
                       </div>
+                      {isDraft && !hasQuestions && (
+                        <p className="text-muted mt-2 mb-0">
+                          Add at least one question before publishing.
+                        </p>
+                      )}
                       {!isDraft && (
                         <p className="alert alert-secondary mt-3 mb-0">
                           Published exams are read-only in the authoring workspace.
                         </p>
+                      )}
+                      {isDraft && isConfirmingPublish && (
+                        <div className="alert alert-info mt-3 mb-0" role="alert">
+                          <p>
+                            The exam will become available as published. Its exam and question
+                            content will become read-only. Publishing cannot currently be undone.
+                          </p>
+                          <div className="d-flex gap-2">
+                            <button
+                              className="btn btn-sm btn-success"
+                              type="button"
+                              onClick={() => handlePublish(exam)}
+                              disabled={Boolean(pendingAction)}
+                            >
+                              {isPublishing ? 'Publishing…' : 'Confirm publish'}
+                            </button>
+                            <button
+                              className="btn btn-sm btn-outline-secondary"
+                              type="button"
+                              onClick={() => setConfirmPublishId(null)}
+                              disabled={Boolean(pendingAction)}
+                            >
+                              Cancel publish
+                            </button>
+                          </div>
+                        </div>
                       )}
                       {isConfirmingDelete && (
                         <div className="alert alert-warning mt-3 mb-0" role="alert">

@@ -12,6 +12,7 @@ import {
   deleteLecturerExam,
   getLecturerExam,
   listLecturerExams,
+  publishLecturerExam,
   updateLecturerExam,
 } from './lecturerExamService';
 
@@ -35,6 +36,13 @@ const exam = {
     name: 'Algorithms',
   },
   question_count: 0,
+};
+
+const publishedExam = {
+  ...exam,
+  status: 'published',
+  published_at: '2026-07-15T10:00:00.000Z',
+  question_count: 2,
 };
 
 let fetchSpy;
@@ -114,6 +122,22 @@ describe('lecturer exam service requests', () => {
       method: 'DELETE',
     });
   });
+
+  test('publishes a lecturer exam with authenticated POST and no request body', async () => {
+    apiRequest.mockResolvedValue(publishedExam);
+
+    await expect(publishLecturerExam(exam.id)).resolves.toEqual(publishedExam);
+    expect(apiRequest).toHaveBeenCalledWith(`/exams/${exam.id}/publish`, {
+      auth: true,
+      method: 'POST',
+    });
+    expect(apiRequest.mock.calls[0][1]).not.toHaveProperty('body');
+  });
+
+  test('rejects an invalid publication exam ID before requesting the API', async () => {
+    await expect(publishLecturerExam(0)).rejects.toThrow(/positive integer/i);
+    expect(apiRequest).not.toHaveBeenCalled();
+  });
 });
 
 describe('lecturer exam response safety', () => {
@@ -123,15 +147,16 @@ describe('lecturer exam response safety', () => {
     ['a malformed create response', () => createLecturerExam({}), null],
     ['a malformed read response', () => getLecturerExam(31), { ...exam, exam_type: null }],
     ['a malformed update response', () => updateLecturerExam(31, { title: 'Updated' }), { ...exam, status: 'unknown' }],
+    ['a malformed publication response', () => publishLecturerExam(31), { ...publishedExam, question_count: -1 }],
   ])('rejects %s', async (_label, requestService, response) => {
     apiRequest.mockResolvedValue(response);
     await expectInvalidResponse(requestService());
   });
 
-  test('preserves safe API errors from the shared client', async () => {
-    const apiError = new ApiError(404, 'Exam not found.');
+  test('preserves safe publication API errors from the shared client', async () => {
+    const apiError = new ApiError(409, 'Exam must contain at least one question.');
     apiRequest.mockRejectedValue(apiError);
 
-    await expect(getLecturerExam(exam.id)).rejects.toBe(apiError);
+    await expect(publishLecturerExam(exam.id)).rejects.toBe(apiError);
   });
 });

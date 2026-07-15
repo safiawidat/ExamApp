@@ -11,7 +11,7 @@ export function errorHandler(error, request, response, next) {
     return response.status(error.status).json({ error: error.message });
   }
 
-  if (error?.code === '23505') {
+  if (error?.code === '23505' && error?.constraint === 'users_username_key') {
     return response.status(409).json({ error: 'Username is already registered.' });
   }
 

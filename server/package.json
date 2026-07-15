@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
+    "db:migrate": "node scripts/migrate.js",
     "seed:users": "node scripts/seedUsers.js",
     "test": "vitest",
     "test:run": "vitest run"

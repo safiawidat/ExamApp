@@ -197,10 +197,12 @@ describe('StudentPortal catalog loading', () => {
     const request = createDeferred();
     listStudentExams.mockReturnValueOnce(request.promise);
 
-    render(<StudentPortal />);
+    const { container } = render(<StudentPortal />);
 
     expect(screen.getByRole('heading', { name: 'Student Portal', level: 1 }))
       .toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Student Portal' })).toBeInTheDocument();
+    expect(container.querySelector('main')).toBeNull();
     expect(screen.getByRole('status')).toHaveTextContent('Loading available exams...');
     expect(screen.queryByText('No published exams are available.')).not.toBeInTheDocument();
     expect(listStudentExams).toHaveBeenCalledTimes(1);

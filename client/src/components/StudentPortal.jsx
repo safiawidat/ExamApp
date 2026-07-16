@@ -278,8 +278,11 @@ const StudentPortal = () => {
   };
 
   return (
-    <main className="container mt-4">
-      <h1 className="mb-4">Student Portal</h1>
+    <section
+      className="container mt-4"
+      aria-labelledby="student-portal-heading"
+    >
+      <h1 className="mb-4" id="student-portal-heading">Student Portal</h1>
 
       {selectedExam ? (
         <StudentForm
@@ -290,7 +293,7 @@ const StudentPortal = () => {
           submissionError={submissionError}
         />
       ) : renderCatalog()}
-    </main>
+    </section>
   );
 };
 

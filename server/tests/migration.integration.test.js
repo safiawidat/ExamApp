@@ -1505,6 +1505,7 @@ describe('Migration 004 question notices', () => {
         SELECT conname AS name, contype AS type
         FROM pg_constraint
         WHERE conrelid = 'question_notices'::REGCLASS
+          AND contype <> 'n'
         ORDER BY conname
       `);
       expect(constraints.rows).toEqual([
@@ -1666,7 +1667,8 @@ describe('Migration 004 question notices', () => {
            WHERE relname = 'question_notices' AND relkind = 'r') AS tables,
           (SELECT COUNT(*)::INTEGER
            FROM pg_constraint
-           WHERE conrelid = 'question_notices'::REGCLASS) AS constraints,
+           WHERE conrelid = 'question_notices'::REGCLASS
+             AND contype <> 'n') AS constraints,
           (SELECT COUNT(*)::INTEGER
            FROM pg_class
            WHERE relname = 'question_notices_exam_question_idx') AS indexes,
@@ -1712,7 +1714,8 @@ describe('Migration 004 question notices', () => {
           ) AS notice_trigger,
           (SELECT COUNT(*)::INTEGER
            FROM pg_constraint
-           WHERE conname LIKE 'question_notices_%') AS notice_constraints
+           WHERE conname LIKE 'question_notices_%'
+             AND contype <> 'n') AS notice_constraints
       `);
       expect(artifacts.rows[0]).toEqual({
         metadata: 0,

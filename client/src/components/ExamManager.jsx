@@ -79,6 +79,7 @@ const ExamManager = ({
   onDelete,
   onPublish,
   onOpenQuestions,
+  onOpenNotices,
 }) => {
   const [createForm, setCreateForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
@@ -345,6 +346,19 @@ const ExamManager = ({
                             </button>
                           </div>
                         )}
+                        {!isDraft && (
+                          <div className="d-flex flex-wrap justify-content-end gap-2">
+                            <button
+                              className="btn btn-sm btn-outline-primary"
+                              type="button"
+                              onClick={() => onOpenNotices(exam)}
+                              disabled={Boolean(pendingAction)}
+                              aria-label={`Manage notices for ${exam.title}`}
+                            >
+                              Manage notices
+                            </button>
+                          </div>
+                        )}
                       </div>
                       {isDraft && !hasQuestions && (
                         <p className="text-muted mt-2 mb-0">
@@ -353,7 +367,8 @@ const ExamManager = ({
                       )}
                       {!isDraft && (
                         <p className="alert alert-secondary mt-3 mb-0">
-                          Published exams are read-only in the authoring workspace.
+                          Published exam and question content is read-only. Question notices
+                          can still be managed separately.
                         </p>
                       )}
                       {isDraft && isConfirmingPublish && (

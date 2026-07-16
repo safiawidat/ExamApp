@@ -28,6 +28,7 @@ import {
   publishLecturerExam,
   updateLecturerExam,
 } from '../api/lecturerExamService';
+import { getQuestionNotice } from '../api/questionNoticeService';
 import { listQuestions } from '../api/questionService';
 import TeacherDashboard from './TeacherDashboard';
 
@@ -52,6 +53,12 @@ vi.mock('../api/questionService', () => ({
   listQuestions: vi.fn(),
   reorderQuestions: vi.fn(),
   updateQuestion: vi.fn(),
+}));
+
+vi.mock('../api/questionNoticeService', () => ({
+  deleteQuestionNotice: vi.fn(),
+  getQuestionNotice: vi.fn(),
+  saveQuestionNotice: vi.fn(),
 }));
 
 const lecturer = {
@@ -140,6 +147,7 @@ let fetchSpy;
 beforeEach(() => {
   vi.clearAllMocks();
   listQuestions.mockResolvedValue([]);
+  getQuestionNotice.mockRejectedValue(new ApiError(404, 'Question notice not found.'));
   fetchSpy = vi.fn();
   vi.stubGlobal('fetch', fetchSpy);
 });
@@ -208,6 +216,12 @@ describe('lecturer exam-authoring workspace', () => {
     )).toBeInTheDocument();
     expect(screen.getByRole('button', { name: `Publish ${draftExam.title}` }))
       .toBeEnabled();
+    expect(screen.getByRole('button', {
+      name: `Manage questions for ${draftExam.title}`,
+    })).toBeInTheDocument();
+    expect(screen.queryByRole('button', {
+      name: `Manage notices for ${draftExam.title}`,
+    })).not.toBeInTheDocument();
   });
 
   test('shared exam types cannot be changed but remain selectable for an exam', async () => {
@@ -511,6 +525,55 @@ describe('draft exam management', () => {
 });
 
 describe('lecturer exam publication', () => {
+  test('published exams expose only separate notice management for immutable content', async () => {
+    await loadDashboard({ examTypes: [ownedType], exams: [publishedExam] });
+
+    expect(screen.getByRole('button', {
+      name: `Manage notices for ${publishedExam.title}`,
+    })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: `Publish ${publishedExam.title}` }))
+      .not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {
+      name: `Manage questions for ${publishedExam.title}`,
+    })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: `Edit ${publishedExam.title}` }))
+      .not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: `Delete ${publishedExam.title}` }))
+      .not.toBeInTheDocument();
+    expect(screen.getByText(
+      /Published exam and question content is read-only.*notices.*managed separately/i,
+    )).toBeInTheDocument();
+  });
+
+  test('opens the selected published exam notice workspace and returns to exams', async () => {
+    const publishedQuestion = {
+      id: 101,
+      exam_id: publishedExam.id,
+      position: 1,
+      question_type: 'true_false',
+      prompt: 'The selected published question',
+      points: 1,
+    };
+    listQuestions.mockResolvedValue([publishedQuestion]);
+    const user = userEvent.setup();
+    await loadDashboard({ examTypes: [ownedType], exams: [publishedExam] });
+
+    await user.click(screen.getByRole('button', {
+      name: `Manage notices for ${publishedExam.title}`,
+    }));
+
+    expect(await screen.findByRole('heading', { name: 'Question notices' }))
+      .toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: publishedExam.title })).toBeInTheDocument();
+    expect(listQuestions).toHaveBeenCalledWith(publishedExam.id);
+    expect(getQuestionNotice).toHaveBeenCalledWith(publishedExam.id, publishedQuestion.id);
+    await user.click(screen.getByRole('button', { name: 'Back to exams' }));
+    expect(screen.getByRole('heading', { name: 'Teacher Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('button', {
+      name: `Manage notices for ${publishedExam.title}`,
+    })).toBeInTheDocument();
+  });
+
   test('disables publication for a zero-question draft and explains why', async () => {
     const user = userEvent.setup();
     await loadDashboard({
@@ -584,7 +647,9 @@ describe('lecturer exam publication', () => {
     });
 
     expect(await screen.findByText('published')).toBeInTheDocument();
-    expect(screen.getByText('Published exams are read-only in the authoring workspace.'))
+    expect(screen.getByText(
+      /Published exam and question content is read-only.*notices.*managed separately/i,
+    ))
       .toBeInTheDocument();
     expect(screen.queryByRole('button', { name: `Publish ${draftExam.title}` }))
       .not.toBeInTheDocument();
@@ -595,6 +660,9 @@ describe('lecturer exam publication', () => {
     expect(screen.queryByRole('button', {
       name: `Manage questions for ${draftExam.title}`,
     })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', {
+      name: `Manage notices for ${publishedExam.title}`,
+    })).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent(
       `Exam “${publishedExam.title}” was published.`,
     );

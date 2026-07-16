@@ -38,6 +38,15 @@ let trueFalseQuestion;
 let firstOption;
 let secondOption;
 
+const shortAnswerNotice = {
+  message: 'Read the clarification before writing your response.',
+  placement: 'above',
+};
+const multipleChoiceNotice = {
+  message: 'Choose the most precise visible option.',
+  placement: 'below',
+};
+
 const registerStudent = async (label) => {
   const response = await request(app)
     .post('/api/auth/register')
@@ -134,6 +143,9 @@ const verifyRunRecordsRemoved = async () => {
         JOIN questions q ON q.id = qo.question_id
         WHERE q.exam_id = ANY($1::int[])) AS question_options,
        (SELECT COUNT(*)::INTEGER
+        FROM question_notices
+        WHERE exam_id = ANY($1::int[])) AS question_notices,
+       (SELECT COUNT(*)::INTEGER
         FROM exam_submissions
         WHERE exam_id = ANY($1::int[])) AS exam_submissions,
        (SELECT COUNT(*)::INTEGER
@@ -148,6 +160,7 @@ const verifyRunRecordsRemoved = async () => {
     exam_types: 0,
     questions: 0,
     question_options: 0,
+    question_notices: 0,
     exam_submissions: 0,
     submission_answers: 0,
   });
@@ -252,6 +265,22 @@ beforeAll(async () => {
     isCorrect: true,
   });
 
+  await pool.query(
+    `INSERT INTO question_notices (question_id, exam_id, message, placement)
+     VALUES
+       ($1, $2, $3, $4),
+       ($5, $2, $6, $7)`,
+    [
+      shortAnswerQuestion.id,
+      detailedExam.id,
+      shortAnswerNotice.message,
+      shortAnswerNotice.placement,
+      multipleChoiceQuestion.id,
+      multipleChoiceNotice.message,
+      multipleChoiceNotice.placement,
+    ],
+  );
+
   await insertQuestion({
     examId: newerTieExam.id,
     type: 'true_false',
@@ -271,6 +300,10 @@ beforeAll(async () => {
 afterAll(async () => {
   if (pool) {
     try {
+      await pool.query(
+        'DELETE FROM question_notices WHERE exam_id = ANY($1::int[])',
+        [createdExamIds],
+      );
       await pool.query(
         'DELETE FROM submission_answers WHERE exam_id = ANY($1::int[])',
         [createdExamIds],
@@ -379,6 +412,7 @@ describe('published student exam catalog', () => {
       },
     ]);
     expect(response.body.map((exam) => exam.id)).not.toContain(draftExam.id);
+    expect(collectKeys(response.body)).not.toContain('notice');
 
     for (const exam of response.body) {
       expect(Object.keys(exam).sort()).toEqual([
@@ -438,6 +472,7 @@ describe('published student exam detail', () => {
           prompt: shortAnswerQuestion.text,
           points: 4,
           position: 1,
+          notice: shortAnswerNotice,
         },
         {
           id: multipleChoiceQuestion.id,
@@ -445,6 +480,7 @@ describe('published student exam detail', () => {
           prompt: multipleChoiceQuestion.text,
           points: 5,
           position: 2,
+          notice: multipleChoiceNotice,
           options: [
             { id: firstOption.id, text: firstOption.text, position: 1 },
             { id: secondOption.id, text: secondOption.text, position: 2 },
@@ -481,8 +517,24 @@ describe('published student exam detail', () => {
     expect(keys).not.toContain('correct_answer');
     expect(keys).not.toContain('reference_answer');
     expect(keys).not.toContain('is_correct');
+    expect(keys).not.toContain('created_at');
+    expect(keys).not.toContain('updated_at');
+    expect(keys).not.toContain('question_id');
+    expect(keys).not.toContain('exam_id');
+    expect(keys).not.toContain('lecturer_id');
     expect(response.body.questions[0]).not.toHaveProperty('options');
     expect(response.body.questions[2]).not.toHaveProperty('options');
+    expect(response.body.questions[2]).not.toHaveProperty('notice');
+    expect(Object.keys(response.body.questions[0].notice).sort()).toEqual([
+      'message',
+      'placement',
+    ]);
+    expect(Object.keys(response.body.questions[1].notice).sort()).toEqual([
+      'message',
+      'placement',
+    ]);
+    expect(response.body.questions[0].notice.placement).toBe('above');
+    expect(response.body.questions[1].notice.placement).toBe('below');
     expect(Object.keys(response.body.questions[1].options[0]).sort()).toEqual([
       'id',
       'position',
@@ -518,7 +570,76 @@ describe('published student exam detail', () => {
     },
   );
 
-  test('does not create submissions or answers or change has_submitted while reading', async () => {
+  test('reflects current persisted notice state without retaining deleted notices', async () => {
+    try {
+      const initial = await request(app)
+        .get(`/api/student/exams/${detailedExam.id}`)
+        .set('Authorization', studentBAuthorization);
+      const initialQuestion = initial.body.questions.find(
+        ({ id }) => id === shortAnswerQuestion.id,
+      );
+
+      expect(initial.status).toBe(200);
+      expect(initialQuestion.notice).toEqual(shortAnswerNotice);
+
+      const changedNotice = {
+        message: 'Updated persisted clarification.',
+        placement: 'below',
+      };
+      await pool.query(
+        `UPDATE question_notices
+         SET message = $2, placement = $3
+         WHERE question_id = $1 AND exam_id = $4`,
+        [
+          shortAnswerQuestion.id,
+          changedNotice.message,
+          changedNotice.placement,
+          detailedExam.id,
+        ],
+      );
+      const updated = await request(app)
+        .get(`/api/student/exams/${detailedExam.id}`)
+        .set('Authorization', studentBAuthorization);
+      const updatedQuestion = updated.body.questions.find(
+        ({ id }) => id === shortAnswerQuestion.id,
+      );
+
+      expect(updated.status).toBe(200);
+      expect(updatedQuestion.notice).toEqual(changedNotice);
+
+      await pool.query(
+        `DELETE FROM question_notices
+         WHERE question_id = $1 AND exam_id = $2`,
+        [shortAnswerQuestion.id, detailedExam.id],
+      );
+      const deleted = await request(app)
+        .get(`/api/student/exams/${detailedExam.id}`)
+        .set('Authorization', studentBAuthorization);
+      const deletedQuestion = deleted.body.questions.find(
+        ({ id }) => id === shortAnswerQuestion.id,
+      );
+
+      expect(deleted.status).toBe(200);
+      expect(deletedQuestion).not.toHaveProperty('notice');
+    } finally {
+      await pool.query(
+        `INSERT INTO question_notices (question_id, exam_id, message, placement)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (question_id) DO UPDATE
+         SET exam_id = EXCLUDED.exam_id,
+             message = EXCLUDED.message,
+             placement = EXCLUDED.placement`,
+        [
+          shortAnswerQuestion.id,
+          detailedExam.id,
+          shortAnswerNotice.message,
+          shortAnswerNotice.placement,
+        ],
+      );
+    }
+  });
+
+  test('does not change notices, submissions, answers, or has_submitted while reading', async () => {
     const before = await pool.query(
       `SELECT
          (SELECT COUNT(*)::INTEGER
@@ -526,7 +647,19 @@ describe('published student exam detail', () => {
           WHERE exam_id = ANY($1::int[])) AS submissions,
          (SELECT COUNT(*)::INTEGER
           FROM submission_answers
-          WHERE exam_id = ANY($1::int[])) AS answers`,
+          WHERE exam_id = ANY($1::int[])) AS answers,
+         (SELECT JSON_AGG(
+            JSON_BUILD_OBJECT(
+              'question_id', question_id,
+              'exam_id', exam_id,
+              'message', message,
+              'placement', placement,
+              'created_at', created_at,
+              'updated_at', updated_at
+            ) ORDER BY question_id
+          )
+          FROM question_notices
+          WHERE exam_id = ANY($1::int[])) AS notices`,
       [createdExamIds],
     );
 
@@ -543,11 +676,25 @@ describe('published student exam detail', () => {
           WHERE exam_id = ANY($1::int[])) AS submissions,
          (SELECT COUNT(*)::INTEGER
           FROM submission_answers
-          WHERE exam_id = ANY($1::int[])) AS answers`,
+          WHERE exam_id = ANY($1::int[])) AS answers,
+         (SELECT JSON_AGG(
+            JSON_BUILD_OBJECT(
+              'question_id', question_id,
+              'exam_id', exam_id,
+              'message', message,
+              'placement', placement,
+              'created_at', created_at,
+              'updated_at', updated_at
+            ) ORDER BY question_id
+          )
+          FROM question_notices
+          WHERE exam_id = ANY($1::int[])) AS notices`,
       [createdExamIds],
     );
 
-    expect(before.rows[0]).toEqual({ submissions: 1, answers: 0 });
+    expect(before.rows[0].submissions).toBe(1);
+    expect(before.rows[0].answers).toBe(0);
+    expect(before.rows[0].notices).toHaveLength(2);
     expect(after.rows[0]).toEqual(before.rows[0]);
     expect(listResponse.body.find(({ id }) => id === detailedExam.id).has_submitted)
       .toBe(false);

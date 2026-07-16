@@ -47,6 +47,13 @@ const mapSafeQuestion = (row, options) => {
     position: row.position,
   };
 
+  if (row.notice_message !== null) {
+    question.notice = {
+      message: row.notice_message,
+      placement: row.notice_placement,
+    };
+  }
+
   if (row.type === 'multiple_choice') {
     question.options = options.map((option) => ({
       id: option.id,
@@ -86,9 +93,19 @@ export async function findPublishedExamForStudent(examId, studentId) {
 export async function findSafePublishedQuestions(examId) {
   const [questionResult, optionResult] = await Promise.all([
     pool.query(
-      `SELECT q.id, q.type, q.text, q.points, q.position
+      `SELECT
+         q.id,
+         q.type,
+         q.text,
+         q.points,
+         q.position,
+         qn.message AS notice_message,
+         qn.placement AS notice_placement
        FROM questions q
        JOIN exams e ON e.id = q.exam_id
+       LEFT JOIN question_notices qn
+         ON qn.question_id = q.id
+        AND qn.exam_id = q.exam_id
        WHERE q.exam_id = $1 AND e.status = 'published'
        ORDER BY q.position, q.id`,
       [examId],

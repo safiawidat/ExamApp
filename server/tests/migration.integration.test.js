@@ -15,10 +15,12 @@ const { Pool } = pg;
 const migration001Name = '001_milestone_2_exam_authoring.sql';
 const migration002Name = '002_question_types.sql';
 const migration003Name = '003_exam_submissions.sql';
+const migration004Name = '004_question_notices.sql';
 const migrationNames = [
   migration001Name,
   migration002Name,
   migration003Name,
+  migration004Name,
 ];
 const migration001Sql = await readFile(
   new URL('../db/migrations/001_milestone_2_exam_authoring.sql', import.meta.url),
@@ -30,6 +32,10 @@ const migration002Sql = await readFile(
 );
 const migration003Sql = await readFile(
   new URL('../db/migrations/003_exam_submissions.sql', import.meta.url),
+  'utf8',
+);
+const migration004Sql = await readFile(
+  new URL('../db/migrations/004_question_notices.sql', import.meta.url),
   'utf8',
 );
 const expectedBootstrapRows = [
@@ -289,6 +295,27 @@ const prepareMigration003Database = async (databasePool) => {
   };
 };
 
+const prepareMigration004Database = async (databasePool) => {
+  const fixture = await prepareMigration003Database(databasePool);
+  await databasePool.query(migration003Sql);
+  return fixture;
+};
+
+const insertNotice = (
+  databasePool,
+  {
+    questionId,
+    examId,
+    message = 'Migration notice',
+    placement = 'above',
+  },
+) => databasePool.query(
+  `INSERT INTO question_notices (question_id, exam_id, message, placement)
+   VALUES ($1, $2, $3, $4)
+   RETURNING question_id, exam_id, message, placement, created_at, updated_at`,
+  [questionId, examId, message, placement],
+);
+
 const insertSubmission = async (databasePool, examId, studentId) => {
   const result = await databasePool.query(
     `INSERT INTO exam_submissions (exam_id, student_id)
@@ -384,6 +411,7 @@ const expectNoMigrationArtifacts = async (databasePool) => {
       TO_REGCLASS('public.question_options') AS question_options,
       TO_REGCLASS('public.exam_submissions') AS exam_submissions,
       TO_REGCLASS('public.submission_answers') AS submission_answers,
+      TO_REGCLASS('public.question_notices') AS question_notices,
       TO_REGPROCEDURE('public.examapp_set_updated_at()') AS timestamp_function,
       TO_REGPROCEDURE('public.examapp_validate_submission_answer()')
         AS answer_validation_function
@@ -396,6 +424,7 @@ const expectNoMigrationArtifacts = async (databasePool) => {
     question_options: null,
     exam_submissions: null,
     submission_answers: null,
+    question_notices: null,
     timestamp_function: null,
     answer_validation_function: null,
   });
@@ -472,6 +501,7 @@ describe('Milestone 2 legacy exam migration', () => {
         { version: '001', name: migration001Name },
         { version: '002', name: migration002Name },
         { version: '003', name: migration003Name },
+        { version: '004', name: migration004Name },
       ]);
     });
   });
@@ -544,7 +574,8 @@ describe('Milestone 2 legacy exam migration', () => {
            WHERE tgname IN (
              'exam_types_set_updated_at',
              'exams_set_updated_at',
-             'questions_set_updated_at'
+             'questions_set_updated_at',
+             'question_notices_set_updated_at'
            )
            AND NOT tgisinternal) AS timestamp_trigger_count,
           (SELECT COUNT(*)::INTEGER FROM pg_trigger
@@ -552,8 +583,8 @@ describe('Milestone 2 legacy exam migration', () => {
              AND NOT tgisinternal) AS answer_trigger_count
       `);
       expect(counts.rows[0]).toEqual({
-        migration_count: 3,
-        timestamp_trigger_count: 3,
+        migration_count: 4,
+        timestamp_trigger_count: 4,
         answer_trigger_count: 1,
       });
     });
@@ -583,6 +614,7 @@ describe('Milestone 2 legacy exam migration', () => {
           TO_REGCLASS('public.question_options') AS question_options,
           TO_REGCLASS('public.exam_submissions') AS exam_submissions,
           TO_REGCLASS('public.submission_answers') AS submission_answers,
+          TO_REGCLASS('public.question_notices') AS question_notices,
           TO_REGPROCEDURE('public.examapp_set_updated_at()') AS timestamp_function,
           TO_REGPROCEDURE('public.examapp_validate_submission_answer()')
             AS answer_validation_function
@@ -593,6 +625,7 @@ describe('Milestone 2 legacy exam migration', () => {
         question_options: null,
         exam_submissions: null,
         submission_answers: null,
+        question_notices: null,
         timestamp_function: null,
         answer_validation_function: null,
       });
@@ -612,7 +645,7 @@ describe('Migration 002 question type constraints', () => {
       await prepareMigration002Database(databasePool);
 
       await expect(runMigrations({ databasePool })).resolves.toEqual({
-        applied: [migration002Name, migration003Name],
+        applied: [migration002Name, migration003Name, migration004Name],
         skipped: [migration001Name],
       });
 
@@ -632,7 +665,7 @@ describe('Migration 002 question type constraints', () => {
       });
 
       await expect(runMigrations({ databasePool })).resolves.toEqual({
-        applied: [migration002Name, migration003Name],
+        applied: [migration002Name, migration003Name, migration004Name],
         skipped: [migration001Name],
       });
 
@@ -881,12 +914,12 @@ describe('Migration 002 question type constraints', () => {
     });
   });
 
-  test('skips migrations 002 and 003 idempotently after a successful rerun', async () => {
+  test('skips migrations 002 through 004 idempotently after a successful rerun', async () => {
     await withTemporaryDatabase(async (databasePool) => {
       await prepareMigration002Database(databasePool);
 
       expect(await runMigrations({ databasePool })).toEqual({
-        applied: [migration002Name, migration003Name],
+        applied: [migration002Name, migration003Name, migration004Name],
         skipped: [migration001Name],
       });
       expect(await runMigrations({ databasePool })).toEqual({
@@ -904,7 +937,7 @@ describe('Migration 002 question type constraints', () => {
     });
   });
 
-  test('runs migrations 001, 002, and 003 in order on a fresh database', async () => {
+  test('runs migrations 001 through 004 in order on a fresh database', async () => {
     await withTemporaryDatabase(async (databasePool) => {
       await createUsersSchema(databasePool);
 
@@ -920,6 +953,7 @@ describe('Migration 002 question type constraints', () => {
         { version: '001', name: migration001Name },
         { version: '002', name: migration002Name },
         { version: '003', name: migration003Name },
+        { version: '004', name: migration004Name },
       ]);
       expect(await getQuestionConstraints(databasePool)).toHaveLength(2);
     });
@@ -958,7 +992,7 @@ describe('Migration 003 exam submissions', () => {
       await prepareMigration003Database(databasePool);
 
       await expect(runMigrations({ databasePool })).resolves.toEqual({
-        applied: [migration003Name],
+        applied: [migration003Name, migration004Name],
         skipped: [migration001Name, migration002Name],
       });
 
@@ -969,6 +1003,7 @@ describe('Migration 003 exam submissions', () => {
         { version: '001', name: migration001Name },
         { version: '002', name: migration002Name },
         { version: '003', name: migration003Name },
+        { version: '004', name: migration004Name },
       ]);
 
       const columns = await databasePool.query(`
@@ -1325,12 +1360,12 @@ describe('Migration 003 exam submissions', () => {
     });
   });
 
-  test('skips all three migrations idempotently after migration 003 succeeds', async () => {
+  test('skips all four migrations idempotently after migration 003 succeeds', async () => {
     await withTemporaryDatabase(async (databasePool) => {
       await prepareMigration003Database(databasePool);
 
       expect(await runMigrations({ databasePool })).toEqual({
-        applied: [migration003Name],
+        applied: [migration003Name, migration004Name],
         skipped: [migration001Name, migration002Name],
       });
       expect(await runMigrations({ databasePool })).toEqual({
@@ -1350,10 +1385,347 @@ describe('Migration 003 exam submissions', () => {
             AS function_count
       `);
       expect(artifacts.rows[0]).toEqual({
-        migration_count: 3,
+        migration_count: 4,
         trigger_count: 1,
         function_count: 1,
       });
+    });
+  });
+});
+
+describe('Migration 004 question notices', () => {
+  test('requires every prerequisite before creating notice artifacts', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      await expect(databasePool.query(migration004Sql)).rejects.toThrow(
+        /requires the existing public\.schema_migrations table/i,
+      );
+      expect((await databasePool.query(
+        "SELECT TO_REGCLASS('public.question_notices') AS notices",
+      )).rows[0].notices).toBeNull();
+    });
+
+    await withTemporaryDatabase(async (databasePool) => {
+      await databasePool.query(`
+        CREATE TABLE schema_migrations (
+          version VARCHAR(20) PRIMARY KEY,
+          name VARCHAR(255) NOT NULL UNIQUE,
+          applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await expect(databasePool.query(migration004Sql)).rejects.toThrow(
+        /requires the existing public\.questions table/i,
+      );
+    });
+
+    await withTemporaryDatabase(async (databasePool) => {
+      await prepareMigration002Database(databasePool);
+      await expect(databasePool.query(migration004Sql)).rejects.toThrow(
+        /requires the existing questions_id_exam_id_unique constraint/i,
+      );
+    });
+
+    await withTemporaryDatabase(async (databasePool) => {
+      await prepareMigration004Database(databasePool);
+      await databasePool.query('DROP FUNCTION examapp_set_updated_at() CASCADE');
+      await expect(databasePool.query(migration004Sql)).rejects.toThrow(
+        /requires the existing public\.examapp_set_updated_at\(\) function/i,
+      );
+      expect((await databasePool.query(
+        "SELECT TO_REGCLASS('public.question_notices') AS notices",
+      )).rows[0].notices).toBeNull();
+    });
+  });
+
+  test('installs exact columns, metadata, constraints, index, and reused trigger function', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      await prepareMigration004Database(databasePool);
+
+      await expect(runMigrations({ databasePool })).resolves.toEqual({
+        applied: [migration004Name],
+        skipped: [migration001Name, migration002Name, migration003Name],
+      });
+
+      const migrations = await databasePool.query(
+        'SELECT version, name FROM schema_migrations ORDER BY version',
+      );
+      expect(migrations.rows).toEqual([
+        { version: '001', name: migration001Name },
+        { version: '002', name: migration002Name },
+        { version: '003', name: migration003Name },
+        { version: '004', name: migration004Name },
+      ]);
+
+      const columns = await databasePool.query(`
+        SELECT column_name, data_type, is_nullable, column_default
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'question_notices'
+        ORDER BY ordinal_position
+      `);
+      expect(columns.rows).toEqual([
+        {
+          column_name: 'question_id',
+          data_type: 'integer',
+          is_nullable: 'NO',
+          column_default: null,
+        },
+        {
+          column_name: 'exam_id',
+          data_type: 'integer',
+          is_nullable: 'NO',
+          column_default: null,
+        },
+        {
+          column_name: 'message',
+          data_type: 'text',
+          is_nullable: 'NO',
+          column_default: null,
+        },
+        {
+          column_name: 'placement',
+          data_type: 'character varying',
+          is_nullable: 'NO',
+          column_default: null,
+        },
+        {
+          column_name: 'created_at',
+          data_type: 'timestamp with time zone',
+          is_nullable: 'NO',
+          column_default: 'CURRENT_TIMESTAMP',
+        },
+        {
+          column_name: 'updated_at',
+          data_type: 'timestamp with time zone',
+          is_nullable: 'NO',
+          column_default: 'CURRENT_TIMESTAMP',
+        },
+      ]);
+
+      const constraints = await databasePool.query(`
+        SELECT conname AS name, contype AS type
+        FROM pg_constraint
+        WHERE conrelid = 'question_notices'::REGCLASS
+        ORDER BY conname
+      `);
+      expect(constraints.rows).toEqual([
+        { name: 'question_notices_message_length_check', type: 'c' },
+        { name: 'question_notices_message_not_blank_check', type: 'c' },
+        { name: 'question_notices_message_trimmed_check', type: 'c' },
+        { name: 'question_notices_pkey', type: 'p' },
+        { name: 'question_notices_placement_check', type: 'c' },
+        { name: 'question_notices_question_exam_fkey', type: 'f' },
+      ]);
+
+      const artifacts = await databasePool.query(`
+        SELECT
+          TO_REGCLASS('public.question_notices_exam_question_idx') AS notice_index,
+          TO_REGPROCEDURE('public.examapp_set_updated_at()') AS timestamp_function,
+          (SELECT COUNT(*)::INTEGER
+           FROM pg_proc
+           WHERE proname = 'examapp_set_updated_at') AS timestamp_function_count,
+          EXISTS (
+            SELECT 1
+            FROM pg_trigger
+            WHERE tgname = 'question_notices_set_updated_at'
+              AND tgrelid = 'question_notices'::REGCLASS
+              AND NOT tgisinternal
+          ) AS timestamp_trigger
+      `);
+      expect(artifacts.rows[0]).toEqual({
+        notice_index: 'question_notices_exam_question_idx',
+        timestamp_function: 'examapp_set_updated_at()',
+        timestamp_function_count: 1,
+        timestamp_trigger: true,
+      });
+    });
+  });
+
+  test('enforces one notice, composite ownership, message rules, and placements', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      const fixture = await prepareMigration004Database(databasePool);
+      await runMigrations({ databasePool });
+
+      await expect(insertNotice(databasePool, {
+        questionId: fixture.questions.multipleChoice.id,
+        examId: fixture.examAId,
+        placement: 'above',
+      })).resolves.toMatchObject({ rowCount: 1 });
+      await expect(insertNotice(databasePool, {
+        questionId: fixture.questions.trueFalse.id,
+        examId: fixture.examAId,
+        message: 'Below notice',
+        placement: 'below',
+      })).resolves.toMatchObject({ rowCount: 1 });
+      await expectPostgresError(insertNotice(databasePool, {
+        questionId: fixture.questions.multipleChoice.id,
+        examId: fixture.examAId,
+      }), '23505');
+      await expectPostgresError(insertNotice(databasePool, {
+        questionId: fixture.questions.shortAnswer.id,
+        examId: fixture.examBId,
+      }), '23503');
+
+      for (const message of ['', '   ', ' untrimmed', 'untrimmed ', 'x'.repeat(1001)]) {
+        await expectPostgresError(insertNotice(databasePool, {
+          questionId: fixture.questions.shortAnswer.id,
+          examId: fixture.examAId,
+          message,
+        }), '23514');
+      }
+
+      for (const placement of ['', 'ABOVE', 'side']) {
+        await expectPostgresError(insertNotice(databasePool, {
+          questionId: fixture.questions.shortAnswer.id,
+          examId: fixture.examAId,
+          placement,
+        }), '23514');
+      }
+
+      const rows = await databasePool.query(`
+        SELECT message, placement
+        FROM question_notices
+        ORDER BY question_id
+      `);
+      expect(rows.rows).toEqual([
+        { message: 'Migration notice', placement: 'above' },
+        { message: 'Below notice', placement: 'below' },
+      ]);
+    });
+  });
+
+  test('reuses the timestamp trigger and cascades deletion from the owning question', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      const fixture = await prepareMigration004Database(databasePool);
+      await runMigrations({ databasePool });
+      const initialTimestamp = '2020-01-01T00:00:00.000Z';
+
+      const inserted = await databasePool.query(
+        `INSERT INTO question_notices (
+           question_id,
+           exam_id,
+           message,
+           placement,
+           created_at,
+           updated_at
+         )
+         VALUES ($1, $2, $3, 'above', $4, $4)
+         RETURNING created_at, updated_at`,
+        [
+          fixture.questions.shortAnswer.id,
+          fixture.examAId,
+          'Original notice',
+          initialTimestamp,
+        ],
+      );
+      const updated = await databasePool.query(
+        `UPDATE question_notices
+         SET message = 'Updated notice'
+         WHERE question_id = $1
+         RETURNING created_at, updated_at`,
+        [fixture.questions.shortAnswer.id],
+      );
+
+      expect(inserted.rows[0].created_at.toISOString()).toBe(initialTimestamp);
+      expect(inserted.rows[0].updated_at.toISOString()).toBe(initialTimestamp);
+      expect(updated.rows[0].created_at.toISOString()).toBe(initialTimestamp);
+      expect(updated.rows[0].updated_at.getTime()).toBeGreaterThan(
+        new Date(initialTimestamp).getTime(),
+      );
+
+      await databasePool.query(
+        'DELETE FROM questions WHERE id = $1 AND exam_id = $2',
+        [fixture.questions.shortAnswer.id, fixture.examAId],
+      );
+      const count = await databasePool.query(
+        'SELECT COUNT(*)::INTEGER AS count FROM question_notices',
+      );
+      expect(count.rows[0].count).toBe(0);
+    });
+  });
+
+  test('is idempotent without duplicating metadata or schema artifacts', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      await prepareMigration004Database(databasePool);
+
+      expect(await runMigrations({ databasePool })).toEqual({
+        applied: [migration004Name],
+        skipped: [migration001Name, migration002Name, migration003Name],
+      });
+      expect(await runMigrations({ databasePool })).toEqual({
+        applied: [],
+        skipped: migrationNames,
+      });
+
+      const counts = await databasePool.query(`
+        SELECT
+          (SELECT COUNT(*)::INTEGER
+           FROM schema_migrations
+           WHERE version = '004' AND name = $1) AS metadata,
+          (SELECT COUNT(*)::INTEGER
+           FROM pg_class
+           WHERE relname = 'question_notices' AND relkind = 'r') AS tables,
+          (SELECT COUNT(*)::INTEGER
+           FROM pg_constraint
+           WHERE conrelid = 'question_notices'::REGCLASS) AS constraints,
+          (SELECT COUNT(*)::INTEGER
+           FROM pg_class
+           WHERE relname = 'question_notices_exam_question_idx') AS indexes,
+          (SELECT COUNT(*)::INTEGER
+           FROM pg_trigger
+           WHERE tgname = 'question_notices_set_updated_at'
+             AND NOT tgisinternal) AS triggers,
+          (SELECT COUNT(*)::INTEGER
+           FROM pg_proc
+           WHERE proname = 'examapp_set_updated_at') AS timestamp_functions
+      `, [migration004Name]);
+      expect(counts.rows[0]).toEqual({
+        metadata: 1,
+        tables: 1,
+        constraints: 6,
+        indexes: 1,
+        triggers: 1,
+        timestamp_functions: 1,
+      });
+    });
+  });
+
+  test('rolls back all new artifacts when installation fails late', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      await prepareMigration004Database(databasePool);
+      await databasePool.query('CREATE TABLE question_notices (sentinel TEXT NOT NULL)');
+
+      await expect(runMigrations({ databasePool })).rejects.toThrow(
+        /relation "question_notices" already exists/i,
+      );
+
+      const artifacts = await databasePool.query(`
+        SELECT
+          (SELECT COUNT(*)::INTEGER
+           FROM schema_migrations
+           WHERE version = '004') AS metadata,
+          TO_REGCLASS('public.question_notices_exam_question_idx') AS notice_index,
+          EXISTS (
+            SELECT 1
+            FROM pg_trigger
+            WHERE tgname = 'question_notices_set_updated_at'
+              AND NOT tgisinternal
+          ) AS notice_trigger,
+          (SELECT COUNT(*)::INTEGER
+           FROM pg_constraint
+           WHERE conname LIKE 'question_notices_%') AS notice_constraints
+      `);
+      expect(artifacts.rows[0]).toEqual({
+        metadata: 0,
+        notice_index: null,
+        notice_trigger: false,
+        notice_constraints: 0,
+      });
+      expect((await databasePool.query(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'question_notices'
+      `)).rows).toEqual([{ column_name: 'sentinel' }]);
     });
   });
 });

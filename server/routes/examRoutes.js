@@ -14,6 +14,11 @@ import {
   patchQuestion,
   putQuestionOrder,
 } from '../controllers/questionController.js';
+import {
+  destroyQuestionNotice,
+  getQuestionNotice,
+  putQuestionNotice,
+} from '../controllers/questionNoticeController.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
 
@@ -29,5 +34,8 @@ examRoutes.delete('/:id', destroyLecturerExam);
 examRoutes.get('/:examId/questions', getQuestions);
 examRoutes.post('/:examId/questions', createQuestion);
 examRoutes.put('/:examId/questions/reorder', putQuestionOrder);
+examRoutes.get('/:examId/questions/:questionId/notice', getQuestionNotice);
+examRoutes.put('/:examId/questions/:questionId/notice', putQuestionNotice);
+examRoutes.delete('/:examId/questions/:questionId/notice', destroyQuestionNotice);
 examRoutes.patch('/:examId/questions/:questionId', patchQuestion);
 examRoutes.delete('/:examId/questions/:questionId', destroyQuestion);

@@ -124,8 +124,8 @@ const StudentExamForm = ({
         )}
 
         <div>
-          {exam.questions.map((question, index) => {
-            const position = index + 1;
+          {exam.questions.map((question) => {
+            const position = question.position;
             const questionId = `exam-${exam.id}-question-${question.id}`;
 
             return (

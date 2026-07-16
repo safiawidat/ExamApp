@@ -120,6 +120,45 @@ describe('StudentForm', () => {
     expect(within(questionGroups[2]).getByRole('radio', { name: 'False' })).toBeInTheDocument();
   });
 
+  test('uses validated nonconsecutive positions without changing supplied question order', () => {
+    const exam = createExam();
+    const positionedExam = {
+      ...exam,
+      questions: exam.questions.map((question, index) => ({
+        ...question,
+        position: [2, 4, 7][index],
+      })),
+    };
+
+    renderForm({ exam: positionedExam });
+
+    const questionGroups = screen.getAllByRole('group');
+    expect(questionGroups).toHaveLength(3);
+    expect(questionGroups[0]).toHaveTextContent('Question 2');
+    expect(questionGroups[0]).toHaveTextContent('Explain the runtime.');
+    expect(questionGroups[1]).toHaveTextContent('Question 4');
+    expect(questionGroups[1]).toHaveTextContent('Choose the stable sort.');
+    expect(questionGroups[2]).toHaveTextContent('Question 7');
+    expect(questionGroups[2]).toHaveTextContent('A binary search requires sorted input.');
+
+    expect(screen.getByRole('textbox', { name: 'Your answer for question 2' }))
+      .toBeInTheDocument();
+    expect(screen.getByRole('note', { name: 'Notice above question 2' }))
+      .toHaveTextContent('Use asymptotic notation.');
+    expect(screen.getByRole('note', { name: 'Notice below question 4' }))
+      .toHaveTextContent('Select one visible option.');
+    expect(screen.queryByRole('note', { name: /question 7/ })).not.toBeInTheDocument();
+
+    expect(screen.queryByText('Question 1', { selector: 'span' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Question 3', { selector: 'span' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Your answer for question 1' }))
+      .not.toBeInTheDocument();
+    expect(screen.queryByRole('note', { name: 'Notice above question 1' }))
+      .not.toBeInTheDocument();
+    expect(screen.queryByRole('note', { name: 'Notice below question 2' }))
+      .not.toBeInTheDocument();
+  });
+
   test('places only the supplied notices at their accessible positions', () => {
     renderForm();
 

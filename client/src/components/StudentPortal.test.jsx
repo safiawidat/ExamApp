@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { ApiError } from '../api/apiClient';
 import {
   getStudentExam,
+  getStudentExamResult,
   listStudentExams,
   submitStudentExam,
 } from '../api/studentExamService';
@@ -25,6 +26,7 @@ const studentFormDouble = vi.hoisted(() => ({
 
 vi.mock('../api/studentExamService', () => ({
   getStudentExam: vi.fn(),
+  getStudentExamResult: vi.fn(),
   listStudentExams: vi.fn(),
   submitStudentExam: vi.fn(),
 }));
@@ -76,6 +78,7 @@ const catalogExams = [
     question_count: 3,
     total_points: 12,
     has_submitted: false,
+    result_available: false,
   },
   {
     id: 33,
@@ -86,6 +89,7 @@ const catalogExams = [
     question_count: 4,
     total_points: 20,
     has_submitted: false,
+    result_available: false,
   },
   {
     id: 32,
@@ -96,6 +100,7 @@ const catalogExams = [
     question_count: 2,
     total_points: 8,
     has_submitted: true,
+    result_available: false,
   },
 ];
 
@@ -145,6 +150,36 @@ const submissionConfirmation = {
   exam_id: completeExam.id,
   submitted_at: '2026-07-16T09:00:00.000Z',
   answer_count: studentFormDouble.answers.length,
+};
+
+const publishedResultExam = {
+  ...catalogExams[2],
+  result_available: true,
+};
+
+const publishedResult = {
+  exam_id: publishedResultExam.id,
+  exam_title: publishedResultExam.title,
+  submission_id: 701,
+  submitted_at: '2026-07-15T09:00:00.000Z',
+  result_published_at: '2026-07-18T12:00:00.000Z',
+  total_score: 1,
+  maximum_score: 1,
+  percentage: 100,
+  questions: [
+    {
+      id: 401,
+      position: 1,
+      question_type: 'true_false',
+      prompt: 'False remains a submitted answer.',
+      is_unanswered: false,
+      awarded_points: 1,
+      maximum_points: 1,
+      feedback: null,
+      boolean_answer: false,
+      correct_answer: false,
+    },
+  ],
 };
 
 const createDeferred = () => {
@@ -266,13 +301,11 @@ describe('StudentPortal catalog loading', () => {
 
 describe('StudentPortal exam opening', () => {
   test('keeps submitted exams disabled and never requests their detail', async () => {
-    const user = userEvent.setup();
     await renderCatalog();
 
-    const submittedButton = within(examCard('Databases quiz'))
-      .getByRole('button', { name: 'Submitted' });
-    expect(submittedButton).toBeDisabled();
-    await user.click(submittedButton);
+    expect(within(examCard('Databases quiz')).getByText('Result not published'))
+      .toBeInTheDocument();
+    expect(within(examCard('Databases quiz')).queryByRole('button')).not.toBeInTheDocument();
     expect(getStudentExam).not.toHaveBeenCalled();
   });
 
@@ -329,8 +362,8 @@ describe('StudentPortal exam opening', () => {
     expect(await screen.findByRole('alert'))
       .toHaveTextContent('This exam has already been submitted.');
     expect(screen.queryByLabelText('Student form test double')).not.toBeInTheDocument();
-    expect(within(examCard('Algorithms midterm')).getByRole('button', { name: 'Submitted' }))
-      .toBeDisabled();
+    expect(within(examCard('Algorithms midterm')).getByText('Result not published'))
+      .toBeInTheDocument();
   });
 
   test('Back returns to the existing catalog without submitting or reloading', async () => {
@@ -344,6 +377,71 @@ describe('StudentPortal exam opening', () => {
     expect(examCard('Algorithms midterm')).toBeInTheDocument();
     expect(submitStudentExam).not.toHaveBeenCalled();
     expect(listStudentExams).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('StudentPortal result workspace', () => {
+  test('shows only the approved catalog statuses and opens a published result', async () => {
+    const user = userEvent.setup();
+    const resultRequest = createDeferred();
+    getStudentExamResult.mockReturnValueOnce(resultRequest.promise);
+    await renderCatalog([catalogExams[0], publishedResultExam]);
+
+    const unpublishedCard = examCard('Algorithms midterm');
+    expect(within(unpublishedCard).getByRole('button', { name: 'Take Exam' }))
+      .toBeEnabled();
+    const publishedCard = examCard('Databases quiz');
+    expect(within(publishedCard).getByRole('button', { name: 'View result' }))
+      .toBeEnabled();
+    expect(publishedCard).not.toHaveTextContent(/score|percentage|feedback/i);
+
+    await user.click(within(publishedCard).getByRole('button', { name: 'View result' }));
+
+    expect(getStudentExamResult).toHaveBeenCalledWith(publishedResultExam.id);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading result...');
+    await settle(() => resultRequest.resolve(publishedResult));
+    expect(await screen.findByRole('heading', { name: 'Databases quiz Result' }))
+      .toBeInTheDocument();
+    expect(screen.getAllByText('1 / 1')).toHaveLength(2);
+    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(screen.getAllByText('False')).toHaveLength(2);
+
+    await user.click(screen.getByRole('button', { name: 'Back to Exams' }));
+    expect(screen.getByRole('heading', { name: 'Available Exams' })).toBeInTheDocument();
+    expect(listStudentExams).toHaveBeenCalledTimes(1);
+  });
+
+  test('preserves result errors and retries the same exam', async () => {
+    const user = userEvent.setup();
+    getStudentExamResult
+      .mockRejectedValueOnce(new ApiError(503, 'Result service unavailable.'))
+      .mockResolvedValueOnce(publishedResult);
+    await renderCatalog([publishedResultExam]);
+
+    await user.click(screen.getByRole('button', { name: 'View result' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Result service unavailable.');
+    await user.click(screen.getByRole('button', { name: 'Retry Result' }));
+
+    expect(getStudentExamResult).toHaveBeenCalledTimes(2);
+    expect(getStudentExamResult).toHaveBeenNthCalledWith(2, publishedResultExam.id);
+    expect(await screen.findByRole('heading', { name: 'Databases quiz Result' }))
+      .toBeInTheDocument();
+  });
+
+  test('ignores a stale result response after returning to the catalog', async () => {
+    const user = userEvent.setup();
+    const resultRequest = createDeferred();
+    getStudentExamResult.mockReturnValueOnce(resultRequest.promise);
+    await renderCatalog([publishedResultExam]);
+
+    await user.click(screen.getByRole('button', { name: 'View result' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Loading result...');
+    await user.click(screen.getByRole('button', { name: 'Back to Exams' }));
+    await settle(() => resultRequest.resolve(publishedResult));
+
+    expect(screen.getByRole('heading', { name: 'Available Exams' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Databases quiz Result' }))
+      .not.toBeInTheDocument();
   });
 });
 
@@ -426,8 +524,8 @@ describe('StudentPortal submission workflow', () => {
     expect(screen.queryByLabelText('Student form test double')).not.toBeInTheDocument();
     expect(screen.getByText('Exam submitted successfully.')).toHaveAttribute('role', 'status');
     expect(screen.getByText('Refreshing exam list...')).toBeInTheDocument();
-    expect(within(examCard('Algorithms midterm')).getByRole('button', { name: 'Submitted' }))
-      .toBeDisabled();
+    expect(within(examCard('Algorithms midterm')).getByText('Result not published'))
+      .toBeInTheDocument();
     expect(listStudentExams).toHaveBeenCalledTimes(2);
     expect(screen.queryByText('501')).not.toBeInTheDocument();
     expect(screen.queryByText('2026-07-16T09:00:00.000Z')).not.toBeInTheDocument();
@@ -439,7 +537,7 @@ describe('StudentPortal submission workflow', () => {
     expect(await screen.findByRole('article', { name: 'Algorithms midterm refreshed' }))
       .toBeInTheDocument();
     expect(within(examCard('Algorithms midterm refreshed'))
-      .getByRole('button', { name: 'Submitted' })).toBeDisabled();
+      .getByText('Result not published')).toBeInTheDocument();
     expect(screen.getByText('Exam submitted successfully.')).toBeInTheDocument();
   });
 
@@ -456,8 +554,8 @@ describe('StudentPortal submission workflow', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Exam submitted successfully, but the exam list could not be refreshed.',
     );
-    expect(within(examCard('Algorithms midterm')).getByRole('button', { name: 'Submitted' }))
-      .toBeDisabled();
+    expect(within(examCard('Algorithms midterm')).getByText('Result not published'))
+      .toBeInTheDocument();
     expect(screen.queryByLabelText('Student form test double')).not.toBeInTheDocument();
     expect(submitStudentExam).toHaveBeenCalledTimes(1);
 

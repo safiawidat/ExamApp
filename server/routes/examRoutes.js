@@ -8,6 +8,14 @@ import {
   publishLecturerExam,
 } from '../controllers/lecturerExamController.js';
 import {
+  getLecturerSubmissionById,
+  getLecturerSubmissions,
+  postLecturerSubmissionGradingComplete,
+  postLecturerSubmissionGradingReopen,
+  postLecturerSubmissionResultPublish,
+  putLecturerSubmissionGrading,
+} from '../controllers/lecturerSubmissionController.js';
+import {
   createQuestion,
   destroyQuestion,
   getQuestions,
@@ -27,6 +35,24 @@ export const examRoutes = Router();
 examRoutes.use(authenticate, authorize('lecturer'));
 examRoutes.get('/', getLecturerExams);
 examRoutes.post('/', createLecturerExam);
+examRoutes.get('/:examId/submissions', getLecturerSubmissions);
+examRoutes.get('/:examId/submissions/:submissionId', getLecturerSubmissionById);
+examRoutes.put(
+  '/:examId/submissions/:submissionId/grading',
+  putLecturerSubmissionGrading,
+);
+examRoutes.post(
+  '/:examId/submissions/:submissionId/grading/complete',
+  postLecturerSubmissionGradingComplete,
+);
+examRoutes.post(
+  '/:examId/submissions/:submissionId/grading/reopen',
+  postLecturerSubmissionGradingReopen,
+);
+examRoutes.post(
+  '/:examId/submissions/:submissionId/result/publish',
+  postLecturerSubmissionResultPublish,
+);
 examRoutes.get('/:id', getLecturerExamById);
 examRoutes.post('/:id/publish', publishLecturerExam);
 examRoutes.patch('/:id', patchLecturerExam);

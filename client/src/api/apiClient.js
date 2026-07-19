@@ -1,9 +1,12 @@
-const DEFAULT_API_BASE_URL = 'http://localhost:3001/api';
+import { resolveApiBaseUrl } from './apiBaseUrl.js';
 
 export const AUTH_TOKEN_KEY = 'examapp.authToken';
 
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-const API_BASE_URL = (configuredBaseUrl || DEFAULT_API_BASE_URL).replace(/\/+$/, '');
+export const API_BASE_URL = resolveApiBaseUrl({
+  configuredBaseUrl,
+  isProduction: import.meta.env.PROD,
+});
 
 export class ApiError extends Error {
   constructor(status, message) {

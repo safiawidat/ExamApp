@@ -50,9 +50,9 @@ if (!testDatabaseName || !hasExplicitTestDatabaseName(testDatabaseName)) {
 }
 
 process.env.NODE_ENV = 'test';
-process.env.DATA_SOURCE = 'postgres';
 process.env.DATABASE_URL = testDatabaseUrl;
 process.env.DB_SSL = 'false';
+process.env.DB_SSL_REJECT_UNAUTHORIZED = 'true';
 process.env.JWT_SECRET = `test-only-${randomUUID()}`;
 process.env.JWT_EXPIRES_IN = '1h';
 

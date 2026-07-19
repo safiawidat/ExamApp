@@ -1,6 +1,7 @@
 import cors from 'cors';
 import express from 'express';
 import { config } from './config.js';
+import { pool } from './db/pool.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { accessRoutes } from './routes/accessRoutes.js';
 import { authRoutes } from './routes/authRoutes.js';
@@ -8,22 +9,44 @@ import { examRoutes } from './routes/examRoutes.js';
 import { examTypeRoutes } from './routes/examTypeRoutes.js';
 import { studentExamRoutes } from './routes/studentExamRoutes.js';
 
-export const app = express();
+export const createApp = ({
+  clientOrigin = config.clientOrigin,
+  databasePool = pool,
+} = {}) => {
+  const application = express();
+  const corsOrigin = (requestOrigin, callback) => {
+    if (!requestOrigin || requestOrigin === clientOrigin) {
+      return callback(null, true);
+    }
 
-app.use(cors({ origin: config.clientOrigin }));
-app.use(express.json({ limit: '100kb' }));
+    return callback(null, false);
+  };
 
-app.get('/api/health', (request, response) => {
-  response.json({
-    status: 'ok',
-    dataSource: config.dataSource,
+  application.use(cors({ origin: corsOrigin }));
+  application.use(express.json({ limit: '100kb' }));
+
+  application.get('/api/health', async (request, response) => {
+    try {
+      await databasePool.query('SELECT 1');
+      return response.json({ status: 'ok' });
+    } catch (error) {
+      console.error('Database health check failed.', {
+        name: error?.name,
+        code: error?.code,
+      });
+      return response.status(503).json({ status: 'unavailable' });
+    }
   });
-});
 
-app.use('/api/auth', authRoutes);
-app.use('/api/exam-types', examTypeRoutes);
-app.use('/api/exams', examRoutes);
-app.use('/api/student/exams', studentExamRoutes);
-app.use(accessRoutes);
+  application.use('/api/auth', authRoutes);
+  application.use('/api/exam-types', examTypeRoutes);
+  application.use('/api/exams', examRoutes);
+  application.use('/api/student/exams', studentExamRoutes);
+  application.use(accessRoutes);
 
-app.use(errorHandler);
+  application.use(errorHandler);
+
+  return application;
+};
+
+export const app = createApp();

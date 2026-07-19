@@ -16,11 +16,13 @@ const migration001Name = '001_milestone_2_exam_authoring.sql';
 const migration002Name = '002_question_types.sql';
 const migration003Name = '003_exam_submissions.sql';
 const migration004Name = '004_question_notices.sql';
+const migration005Name = '005_grading_results.sql';
 const migrationNames = [
   migration001Name,
   migration002Name,
   migration003Name,
   migration004Name,
+  migration005Name,
 ];
 const migration001Sql = await readFile(
   new URL('../db/migrations/001_milestone_2_exam_authoring.sql', import.meta.url),
@@ -36,6 +38,10 @@ const migration003Sql = await readFile(
 );
 const migration004Sql = await readFile(
   new URL('../db/migrations/004_question_notices.sql', import.meta.url),
+  'utf8',
+);
+const migration005Sql = await readFile(
+  new URL('../db/migrations/005_grading_results.sql', import.meta.url),
   'utf8',
 );
 const expectedBootstrapRows = [
@@ -301,6 +307,12 @@ const prepareMigration004Database = async (databasePool) => {
   return fixture;
 };
 
+const prepareMigration005Database = async (databasePool) => {
+  const fixture = await prepareMigration004Database(databasePool);
+  await databasePool.query(migration004Sql);
+  return fixture;
+};
+
 const insertNotice = (
   databasePool,
   {
@@ -502,6 +514,7 @@ describe('Milestone 2 legacy exam migration', () => {
         { version: '002', name: migration002Name },
         { version: '003', name: migration003Name },
         { version: '004', name: migration004Name },
+        { version: '005', name: migration005Name },
       ]);
     });
   });
@@ -583,7 +596,7 @@ describe('Milestone 2 legacy exam migration', () => {
              AND NOT tgisinternal) AS answer_trigger_count
       `);
       expect(counts.rows[0]).toEqual({
-        migration_count: 4,
+        migration_count: 5,
         timestamp_trigger_count: 4,
         answer_trigger_count: 1,
       });
@@ -645,7 +658,12 @@ describe('Migration 002 question type constraints', () => {
       await prepareMigration002Database(databasePool);
 
       await expect(runMigrations({ databasePool })).resolves.toEqual({
-        applied: [migration002Name, migration003Name, migration004Name],
+        applied: [
+          migration002Name,
+          migration003Name,
+          migration004Name,
+          migration005Name,
+        ],
         skipped: [migration001Name],
       });
 
@@ -665,7 +683,12 @@ describe('Migration 002 question type constraints', () => {
       });
 
       await expect(runMigrations({ databasePool })).resolves.toEqual({
-        applied: [migration002Name, migration003Name, migration004Name],
+        applied: [
+          migration002Name,
+          migration003Name,
+          migration004Name,
+          migration005Name,
+        ],
         skipped: [migration001Name],
       });
 
@@ -914,12 +937,17 @@ describe('Migration 002 question type constraints', () => {
     });
   });
 
-  test('skips migrations 002 through 004 idempotently after a successful rerun', async () => {
+  test('skips migrations 002 through 005 idempotently after a successful rerun', async () => {
     await withTemporaryDatabase(async (databasePool) => {
       await prepareMigration002Database(databasePool);
 
       expect(await runMigrations({ databasePool })).toEqual({
-        applied: [migration002Name, migration003Name, migration004Name],
+        applied: [
+          migration002Name,
+          migration003Name,
+          migration004Name,
+          migration005Name,
+        ],
         skipped: [migration001Name],
       });
       expect(await runMigrations({ databasePool })).toEqual({
@@ -937,7 +965,7 @@ describe('Migration 002 question type constraints', () => {
     });
   });
 
-  test('runs migrations 001 through 004 in order on a fresh database', async () => {
+  test('runs migrations 001 through 005 in order on a fresh database', async () => {
     await withTemporaryDatabase(async (databasePool) => {
       await createUsersSchema(databasePool);
 
@@ -954,6 +982,7 @@ describe('Migration 002 question type constraints', () => {
         { version: '002', name: migration002Name },
         { version: '003', name: migration003Name },
         { version: '004', name: migration004Name },
+        { version: '005', name: migration005Name },
       ]);
       expect(await getQuestionConstraints(databasePool)).toHaveLength(2);
     });
@@ -992,7 +1021,7 @@ describe('Migration 003 exam submissions', () => {
       await prepareMigration003Database(databasePool);
 
       await expect(runMigrations({ databasePool })).resolves.toEqual({
-        applied: [migration003Name, migration004Name],
+        applied: [migration003Name, migration004Name, migration005Name],
         skipped: [migration001Name, migration002Name],
       });
 
@@ -1004,6 +1033,7 @@ describe('Migration 003 exam submissions', () => {
         { version: '002', name: migration002Name },
         { version: '003', name: migration003Name },
         { version: '004', name: migration004Name },
+        { version: '005', name: migration005Name },
       ]);
 
       const columns = await databasePool.query(`
@@ -1018,12 +1048,19 @@ describe('Migration 003 exam submissions', () => {
         { table_name: 'exam_submissions', column_name: 'exam_id' },
         { table_name: 'exam_submissions', column_name: 'student_id' },
         { table_name: 'exam_submissions', column_name: 'submitted_at' },
+        { table_name: 'exam_submissions', column_name: 'grading_state' },
+        { table_name: 'exam_submissions', column_name: 'total_score' },
+        { table_name: 'exam_submissions', column_name: 'graded_by' },
+        { table_name: 'exam_submissions', column_name: 'grading_completed_at' },
+        { table_name: 'exam_submissions', column_name: 'result_published_at' },
         { table_name: 'submission_answers', column_name: 'submission_id' },
         { table_name: 'submission_answers', column_name: 'exam_id' },
         { table_name: 'submission_answers', column_name: 'question_id' },
         { table_name: 'submission_answers', column_name: 'selected_option_id' },
         { table_name: 'submission_answers', column_name: 'boolean_answer' },
         { table_name: 'submission_answers', column_name: 'text_answer' },
+        { table_name: 'submission_answers', column_name: 'awarded_points' },
+        { table_name: 'submission_answers', column_name: 'lecturer_feedback' },
       ]);
 
       const constraints = await databasePool.query(`
@@ -1360,12 +1397,12 @@ describe('Migration 003 exam submissions', () => {
     });
   });
 
-  test('skips all four migrations idempotently after migration 003 succeeds', async () => {
+  test('skips all migrations idempotently after migration 003 succeeds', async () => {
     await withTemporaryDatabase(async (databasePool) => {
       await prepareMigration003Database(databasePool);
 
       expect(await runMigrations({ databasePool })).toEqual({
-        applied: [migration003Name, migration004Name],
+        applied: [migration003Name, migration004Name, migration005Name],
         skipped: [migration001Name, migration002Name],
       });
       expect(await runMigrations({ databasePool })).toEqual({
@@ -1385,7 +1422,7 @@ describe('Migration 003 exam submissions', () => {
             AS function_count
       `);
       expect(artifacts.rows[0]).toEqual({
-        migration_count: 4,
+        migration_count: 5,
         trigger_count: 1,
         function_count: 1,
       });
@@ -1441,7 +1478,7 @@ describe('Migration 004 question notices', () => {
       await prepareMigration004Database(databasePool);
 
       await expect(runMigrations({ databasePool })).resolves.toEqual({
-        applied: [migration004Name],
+        applied: [migration004Name, migration005Name],
         skipped: [migration001Name, migration002Name, migration003Name],
       });
 
@@ -1453,6 +1490,7 @@ describe('Migration 004 question notices', () => {
         { version: '002', name: migration002Name },
         { version: '003', name: migration003Name },
         { version: '004', name: migration004Name },
+        { version: '005', name: migration005Name },
       ]);
 
       const columns = await databasePool.query(`
@@ -1649,7 +1687,7 @@ describe('Migration 004 question notices', () => {
       await prepareMigration004Database(databasePool);
 
       expect(await runMigrations({ databasePool })).toEqual({
-        applied: [migration004Name],
+        applied: [migration004Name, migration005Name],
         skipped: [migration001Name, migration002Name, migration003Name],
       });
       expect(await runMigrations({ databasePool })).toEqual({
@@ -1729,6 +1767,309 @@ describe('Migration 004 question notices', () => {
         WHERE table_schema = 'public'
           AND table_name = 'question_notices'
       `)).rows).toEqual([{ column_name: 'sentinel' }]);
+    });
+  });
+});
+
+describe('Migration 005 grading results', () => {
+  test('applies after migrations 001 through 004 and reruns safely', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      const fixture = await prepareMigration005Database(databasePool);
+      const existingSubmission = await insertSubmission(
+        databasePool,
+        fixture.examAId,
+        fixture.studentOneId,
+      );
+      await insertAnswer(databasePool, {
+        submissionId: existingSubmission.id,
+        examId: fixture.examAId,
+        questionId: fixture.questions.shortAnswer.id,
+        textAnswer: 'Existing response',
+      });
+
+      expect(await runMigrations({ databasePool })).toEqual({
+        applied: [migration005Name],
+        skipped: [
+          migration001Name,
+          migration002Name,
+          migration003Name,
+          migration004Name,
+        ],
+      });
+      expect(await runMigrations({ databasePool })).toEqual({
+        applied: [],
+        skipped: migrationNames,
+      });
+
+      const submission = await databasePool.query(
+        `SELECT
+           grading_state,
+           total_score,
+           graded_by,
+           grading_completed_at,
+           result_published_at
+         FROM exam_submissions
+         WHERE id = $1`,
+        [existingSubmission.id],
+      );
+      expect(submission.rows[0]).toEqual({
+        grading_state: 'ungraded',
+        total_score: null,
+        graded_by: null,
+        grading_completed_at: null,
+        result_published_at: null,
+      });
+
+      const answer = await databasePool.query(
+        `SELECT awarded_points, lecturer_feedback
+         FROM submission_answers
+         WHERE submission_id = $1 AND question_id = $2`,
+        [existingSubmission.id, fixture.questions.shortAnswer.id],
+      );
+      expect(answer.rows[0]).toEqual({
+        awarded_points: null,
+        lecturer_feedback: null,
+      });
+
+      const columns = await databasePool.query(`
+        SELECT table_name, column_name, data_type, is_nullable, column_default
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND (
+            (table_name = 'submission_answers'
+             AND column_name IN ('awarded_points', 'lecturer_feedback'))
+            OR
+            (table_name = 'exam_submissions'
+             AND column_name IN (
+               'grading_state',
+               'total_score',
+               'graded_by',
+               'grading_completed_at',
+               'result_published_at'
+             ))
+          )
+        ORDER BY table_name, ordinal_position
+      `);
+      expect(columns.rows).toEqual([
+        {
+          table_name: 'exam_submissions',
+          column_name: 'grading_state',
+          data_type: 'character varying',
+          is_nullable: 'NO',
+          column_default: "'ungraded'::character varying",
+        },
+        {
+          table_name: 'exam_submissions',
+          column_name: 'total_score',
+          data_type: 'numeric',
+          is_nullable: 'YES',
+          column_default: null,
+        },
+        {
+          table_name: 'exam_submissions',
+          column_name: 'graded_by',
+          data_type: 'integer',
+          is_nullable: 'YES',
+          column_default: null,
+        },
+        {
+          table_name: 'exam_submissions',
+          column_name: 'grading_completed_at',
+          data_type: 'timestamp with time zone',
+          is_nullable: 'YES',
+          column_default: null,
+        },
+        {
+          table_name: 'exam_submissions',
+          column_name: 'result_published_at',
+          data_type: 'timestamp with time zone',
+          is_nullable: 'YES',
+          column_default: null,
+        },
+        {
+          table_name: 'submission_answers',
+          column_name: 'awarded_points',
+          data_type: 'numeric',
+          is_nullable: 'YES',
+          column_default: null,
+        },
+        {
+          table_name: 'submission_answers',
+          column_name: 'lecturer_feedback',
+          data_type: 'text',
+          is_nullable: 'YES',
+          column_default: null,
+        },
+      ]);
+    });
+  });
+
+  test('accepts exact answer marks from zero through one and unrestricted feedback', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      const fixture = await prepareMigration005Database(databasePool);
+      await runMigrations({ databasePool });
+      const submission = await insertSubmission(
+        databasePool,
+        fixture.examAId,
+        fixture.studentOneId,
+      );
+      await insertAnswer(databasePool, {
+        submissionId: submission.id,
+        examId: fixture.examAId,
+        questionId: fixture.questions.shortAnswer.id,
+      });
+
+      for (const mark of [0, 1, 0.375]) {
+        const updated = await databasePool.query(
+          `UPDATE submission_answers
+           SET awarded_points = $1
+           WHERE submission_id = $2 AND question_id = $3
+           RETURNING awarded_points`,
+          [mark, submission.id, fixture.questions.shortAnswer.id],
+        );
+        expect(Number(updated.rows[0].awarded_points)).toBe(mark);
+      }
+
+      const feedback = 'Detailed feedback. '.repeat(500);
+      const updatedFeedback = await databasePool.query(
+        `UPDATE submission_answers
+         SET lecturer_feedback = $1
+         WHERE submission_id = $2 AND question_id = $3
+         RETURNING lecturer_feedback`,
+        [feedback, submission.id, fixture.questions.shortAnswer.id],
+      );
+      expect(updatedFeedback.rows[0].lecturer_feedback).toBe(feedback);
+
+      for (const mark of [-0.001, 1.001]) {
+        await expectPostgresError(databasePool.query(
+          `UPDATE submission_answers
+           SET awarded_points = $1
+           WHERE submission_id = $2 AND question_id = $3`,
+          [mark, submission.id, fixture.questions.shortAnswer.id],
+        ), '23514');
+      }
+    });
+  });
+
+  test('rejects invalid grading states, totals, completion data, and early publication', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      const fixture = await prepareMigration005Database(databasePool);
+      await runMigrations({ databasePool });
+      const submission = await insertSubmission(
+        databasePool,
+        fixture.examAId,
+        fixture.studentOneId,
+      );
+
+      await expectPostgresError(databasePool.query(
+        `UPDATE exam_submissions
+         SET grading_state = 'invalid'
+         WHERE id = $1`,
+        [submission.id],
+      ), '23514');
+      await expectPostgresError(databasePool.query(
+        `UPDATE exam_submissions
+         SET grading_state = 'completed'
+         WHERE id = $1`,
+        [submission.id],
+      ), '23514');
+      await expectPostgresError(databasePool.query(
+        `UPDATE exam_submissions
+         SET total_score = -0.01
+         WHERE id = $1`,
+        [submission.id],
+      ), '23514');
+      await expectPostgresError(databasePool.query(
+        `UPDATE exam_submissions
+         SET result_published_at = submitted_at
+         WHERE id = $1`,
+        [submission.id],
+      ), '23514');
+      await expectPostgresError(databasePool.query(
+        `UPDATE exam_submissions
+         SET grading_state = 'completed',
+             total_score = 1,
+             graded_by = $2,
+             grading_completed_at = submitted_at - INTERVAL '1 second'
+         WHERE id = $1`,
+        [submission.id, fixture.lecturerId],
+      ), '23514');
+    });
+  });
+
+  test('enforces the grading lecturer foreign key', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      const fixture = await prepareMigration005Database(databasePool);
+      await runMigrations({ databasePool });
+      const submission = await insertSubmission(
+        databasePool,
+        fixture.examAId,
+        fixture.studentOneId,
+      );
+
+      await expectPostgresError(databasePool.query(
+        `UPDATE exam_submissions
+         SET grading_state = 'completed',
+             total_score = 1,
+             graded_by = 2147483647,
+             grading_completed_at = submitted_at
+         WHERE id = $1`,
+        [submission.id],
+      ), '23503');
+    });
+  });
+
+  test('allows a completed scored grading record to be published afterward', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      const fixture = await prepareMigration005Database(databasePool);
+      await runMigrations({ databasePool });
+      const submission = await insertSubmission(
+        databasePool,
+        fixture.examAId,
+        fixture.studentOneId,
+      );
+
+      await databasePool.query(
+        `UPDATE exam_submissions
+         SET grading_state = 'completed',
+             total_score = 2.375,
+             graded_by = $2,
+             grading_completed_at = submitted_at
+         WHERE id = $1`,
+        [submission.id, fixture.lecturerId],
+      );
+      const published = await databasePool.query(
+        `UPDATE exam_submissions
+         SET result_published_at = grading_completed_at + INTERVAL '1 second'
+         WHERE id = $1
+         RETURNING
+           grading_state,
+           total_score,
+           graded_by,
+           grading_completed_at,
+           result_published_at`,
+        [submission.id],
+      );
+
+      expect(published.rows[0]).toMatchObject({
+        grading_state: 'completed',
+        total_score: '2.375',
+        graded_by: fixture.lecturerId,
+      });
+      expect(published.rows[0].result_published_at.getTime()).toBeGreaterThan(
+        published.rows[0].grading_completed_at.getTime(),
+      );
+    });
+  });
+
+  test('requires grading schema prerequisites before altering submission tables', async () => {
+    await withTemporaryDatabase(async (databasePool) => {
+      await expect(databasePool.query(migration005Sql)).rejects.toThrow(
+        /requires the existing public\.schema_migrations table/i,
+      );
+      expect((await databasePool.query(
+        "SELECT TO_REGCLASS('public.exam_submissions') AS submissions",
+      )).rows[0].submissions).toBeNull();
     });
   });
 });

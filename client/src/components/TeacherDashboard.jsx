@@ -16,6 +16,7 @@ import ExamManager from './ExamManager';
 import ExamTypeManager from './ExamTypeManager';
 import QuestionEditor from './QuestionEditor';
 import QuestionNoticeEditor from './QuestionNoticeEditor';
+import SubmissionReviewWorkspace from './SubmissionReviewWorkspace';
 import { safeApiMessage } from './authoringUi';
 
 const loadWorkspace = () => Promise.all([
@@ -149,6 +150,11 @@ const TeacherDashboard = ({ currentUser, onOpenQuestionEditor }) => {
     setSelectedWorkspace('notices');
   };
 
+  const handleOpenSubmissions = (exam) => {
+    setSelectedExamId(exam.id);
+    setSelectedWorkspace('submissions');
+  };
+
   const handleBackToExams = () => {
     setSelectedExamId(null);
     setSelectedWorkspace(null);
@@ -177,6 +183,15 @@ const TeacherDashboard = ({ currentUser, onOpenQuestionEditor }) => {
   if (selectedExam && selectedWorkspace === 'notices') {
     return (
       <QuestionNoticeEditor
+        exam={selectedExam}
+        onBack={handleBackToExams}
+      />
+    );
+  }
+
+  if (selectedExam && selectedWorkspace === 'submissions') {
+    return (
+      <SubmissionReviewWorkspace
         exam={selectedExam}
         onBack={handleBackToExams}
       />
@@ -236,6 +251,7 @@ const TeacherDashboard = ({ currentUser, onOpenQuestionEditor }) => {
               onPublish={handlePublishExam}
               onOpenQuestions={handleOpenQuestions}
               onOpenNotices={handleOpenNotices}
+              onOpenSubmissions={handleOpenSubmissions}
             />
           </div>
         </div>

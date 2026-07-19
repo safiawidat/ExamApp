@@ -30,6 +30,7 @@ import {
 } from '../api/lecturerExamService';
 import { getOptionalQuestionNotice } from '../api/questionNoticeService';
 import { listQuestions } from '../api/questionService';
+import { listLecturerSubmissions } from '../api/lecturerGradingService';
 import TeacherDashboard from './TeacherDashboard';
 
 vi.mock('../api/examTypeService', () => ({
@@ -59,6 +60,14 @@ vi.mock('../api/questionNoticeService', () => ({
   deleteQuestionNotice: vi.fn(),
   getOptionalQuestionNotice: vi.fn(),
   saveQuestionNotice: vi.fn(),
+}));
+
+vi.mock('../api/lecturerGradingService', () => ({
+  completeLecturerSubmissionGrading: vi.fn(),
+  getLecturerSubmission: vi.fn(),
+  listLecturerSubmissions: vi.fn(),
+  reopenLecturerSubmissionGrading: vi.fn(),
+  saveLecturerSubmissionGrading: vi.fn(),
 }));
 
 const lecturer = {
@@ -148,6 +157,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   listQuestions.mockResolvedValue([]);
   getOptionalQuestionNotice.mockResolvedValue(null);
+  listLecturerSubmissions.mockResolvedValue([]);
   fetchSpy = vi.fn();
   vi.stubGlobal('fetch', fetchSpy);
 });
@@ -531,6 +541,9 @@ describe('lecturer exam publication', () => {
     expect(screen.getByRole('button', {
       name: `Manage notices for ${publishedExam.title}`,
     })).toBeInTheDocument();
+    expect(screen.getByRole('button', {
+      name: `Review submissions for ${publishedExam.title}`,
+    })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: `Publish ${publishedExam.title}` }))
       .not.toBeInTheDocument();
     expect(screen.queryByRole('button', {
@@ -575,6 +588,33 @@ describe('lecturer exam publication', () => {
     expect(screen.getByRole('button', {
       name: `Manage notices for ${publishedExam.title}`,
     })).toBeInTheDocument();
+  });
+
+  test('opens submission review only for a published exam and returns to exams', async () => {
+    const reviewExam = {
+      ...publishedExam,
+      id: 33,
+      title: 'Published algorithms final',
+    };
+    const user = userEvent.setup();
+    await loadDashboard({
+      examTypes: [ownedType],
+      exams: [draftExam, reviewExam],
+    });
+
+    expect(screen.queryByRole('button', {
+      name: `Review submissions for ${draftExam.title}`,
+    })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', {
+      name: `Review submissions for ${reviewExam.title}`,
+    }));
+
+    expect(await screen.findByRole('heading', { name: 'Submission review' }))
+      .toBeInTheDocument();
+    expect(screen.getByText('No submissions have been received yet.')).toBeInTheDocument();
+    expect(listLecturerSubmissions).toHaveBeenCalledWith(reviewExam.id);
+    await user.click(screen.getByRole('button', { name: 'Back to exams' }));
+    expect(screen.getByRole('heading', { name: 'Teacher Dashboard' })).toBeInTheDocument();
   });
 
   test('disables publication for a zero-question draft and explains why', async () => {

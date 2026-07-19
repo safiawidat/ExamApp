@@ -91,7 +91,11 @@ const validateExamType = (value, resource) => {
   };
 };
 
-const validateStudentExamBase = (value, resource) => {
+const validateStudentExamBase = (
+  value,
+  resource,
+  { requireResultAvailability = false } = {},
+) => {
   if (
     !isPlainObject(value)
     || !isPositiveInteger(value.id)
@@ -101,11 +105,12 @@ const validateStudentExamBase = (value, resource) => {
     || !isNonNegativeInteger(value.question_count)
     || !isNonNegativeInteger(value.total_points)
     || typeof value.has_submitted !== 'boolean'
+    || (requireResultAvailability && typeof value.result_available !== 'boolean')
   ) {
     throw invalidResponse(resource);
   }
 
-  return {
+  const exam = {
     id: value.id,
     title: value.title,
     description: value.description,
@@ -115,6 +120,12 @@ const validateStudentExamBase = (value, resource) => {
     total_points: value.total_points,
     has_submitted: value.has_submitted,
   };
+
+  if (requireResultAvailability) {
+    exam.result_available = value.result_available;
+  }
+
+  return exam;
 };
 
 const validateNotice = (value, resource) => {
@@ -216,7 +227,9 @@ export const validateStudentExamList = (value) => {
     throw invalidResponse(resource);
   }
 
-  return value.map((exam) => validateStudentExamBase(exam, resource));
+  return value.map((exam) => validateStudentExamBase(exam, resource, {
+    requireResultAvailability: true,
+  }));
 };
 
 export const validateStudentExam = (value) => {

@@ -3,7 +3,11 @@ import { config } from '../config.js';
 
 const { Pool } = pg;
 
-export const pool = new Pool({
-  connectionString: config.databaseUrl,
-  ssl: config.dbSsl ? { rejectUnauthorized: false } : false,
+export const createPoolOptions = (runtimeConfig = config) => ({
+  connectionString: runtimeConfig.databaseUrl,
+  ssl: runtimeConfig.dbSsl
+    ? { rejectUnauthorized: runtimeConfig.dbSslRejectUnauthorized }
+    : false,
 });
+
+export const pool = new Pool(createPoolOptions());

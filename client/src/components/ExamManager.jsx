@@ -80,6 +80,7 @@ const ExamManager = ({
   onPublish,
   onOpenQuestions,
   onOpenNotices,
+  onOpenSubmissions,
 }) => {
   const [createForm, setCreateForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
@@ -348,6 +349,15 @@ const ExamManager = ({
                         )}
                         {!isDraft && (
                           <div className="d-flex flex-wrap justify-content-end gap-2">
+                            <button
+                              className="btn btn-sm btn-outline-success"
+                              type="button"
+                              onClick={() => onOpenSubmissions(exam)}
+                              disabled={Boolean(pendingAction)}
+                              aria-label={`Review submissions for ${exam.title}`}
+                            >
+                              Review submissions
+                            </button>
                             <button
                               className="btn btn-sm btn-outline-primary"
                               type="button"

@@ -226,7 +226,7 @@ describe('question creation and updates', () => {
     const user = userEvent.setup();
     const { onQuestionCountChange } = await loadEditor([]);
 
-    fireEvent.change(screen.getByLabelText('Prompt'), {
+    fireEvent.change(screen.getByLabelText('Question'), {
       target: { value: multipleChoiceQuestion.prompt },
     });
     fireEvent.change(screen.getByLabelText('Points'), {
@@ -242,7 +242,7 @@ describe('question creation and updates', () => {
     expect(createQuestion).toHaveBeenNthCalledWith(1, exam.id, multipleChoicePayload);
 
     await user.selectOptions(screen.getByLabelText('Question type'), 'true_false');
-    fireEvent.change(screen.getByLabelText('Prompt'), {
+    fireEvent.change(screen.getByLabelText('Question'), {
       target: { value: trueFalseQuestion.prompt },
     });
     fireEvent.change(screen.getByLabelText('Points'), {
@@ -257,7 +257,7 @@ describe('question creation and updates', () => {
     expect(createQuestion.mock.calls[1][1].correct_answer).toBe(false);
 
     await user.selectOptions(screen.getByLabelText('Question type'), 'short_answer');
-    fireEvent.change(screen.getByLabelText('Prompt'), {
+    fireEvent.change(screen.getByLabelText('Question'), {
       target: { value: shortAnswerQuestion.prompt },
     });
     fireEvent.change(screen.getByLabelText('Points'), {
@@ -305,7 +305,7 @@ describe('question creation and updates', () => {
     await loadEditor([]);
 
     await user.selectOptions(screen.getByLabelText('Question type'), 'true_false');
-    fireEvent.change(screen.getByLabelText('Prompt'), {
+    fireEvent.change(screen.getByLabelText('Question'), {
       target: { value: 'Still a draft?' },
     });
     await user.click(screen.getByRole('button', { name: 'Add question' }));
@@ -313,7 +313,7 @@ describe('question creation and updates', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Published exams cannot be modified.',
     );
-    expect(screen.getByLabelText('Prompt')).toHaveValue('Still a draft?');
+    expect(screen.getByLabelText('Question')).toHaveValue('Still a draft?');
     expect(screen.getByRole('heading', { name: 'Questions (0)' })).toBeInTheDocument();
   });
 
@@ -331,7 +331,7 @@ describe('question creation and updates', () => {
 
     await user.click(screen.getByRole('button', { name: 'Delete question 1' }));
     await user.selectOptions(screen.getByLabelText('Question type'), 'true_false');
-    await user.type(screen.getByLabelText('Prompt'), created.prompt);
+    await user.type(screen.getByLabelText('Question'), created.prompt);
     const createForm = screen.getByRole('button', { name: 'Add question' }).closest('form');
     fireEvent.submit(createForm);
     fireEvent.submit(createForm);
@@ -391,7 +391,7 @@ describe('question creation and updates', () => {
     const { rerender } = await loadEditor([multipleChoiceQuestion]);
 
     await user.selectOptions(screen.getByLabelText('Question type'), 'true_false');
-    await user.type(screen.getByLabelText('Prompt'), created.prompt);
+    await user.type(screen.getByLabelText('Question'), created.prompt);
     await user.click(screen.getByRole('button', { name: 'Add question' }));
 
     listQuestions.mockResolvedValueOnce([multipleChoiceQuestion, trueFalseQuestion]);
@@ -425,7 +425,7 @@ describe('question creation and updates', () => {
     await loadEditor([multipleChoiceQuestion]);
 
     await user.click(screen.getByRole('button', { name: 'Edit question 1' }));
-    const editPrompt = screen.getAllByLabelText('Prompt')[1];
+    const editPrompt = screen.getAllByLabelText('Question')[1];
     await user.clear(editPrompt);
     await user.type(editPrompt, 'Changed only in the failed form');
     await user.click(screen.getByRole('button', { name: 'Save question' }));

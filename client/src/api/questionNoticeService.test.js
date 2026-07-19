@@ -9,6 +9,7 @@ import {
 import { ApiError, apiRequest } from './apiClient';
 import {
   deleteQuestionNotice,
+  getOptionalQuestionNotice,
   getQuestionNotice,
   saveQuestionNotice,
 } from './questionNoticeService';
@@ -67,6 +68,28 @@ describe('question notice service requests', () => {
     );
   });
 
+  test('gets an optional notice without changing a real notice response', async () => {
+    apiRequest.mockResolvedValue(validNotice);
+
+    await expect(getOptionalQuestionNotice(
+      validNotice.exam_id,
+      validNotice.question_id,
+    )).resolves.toEqual(validNotice);
+    expect(apiRequest).toHaveBeenCalledWith(
+      `/exams/${validNotice.exam_id}/questions/${validNotice.question_id}/notice?allow_missing=true`,
+      { auth: true },
+    );
+  });
+
+  test('returns null for an optional missing notice response', async () => {
+    apiRequest.mockResolvedValue(null);
+
+    await expect(getOptionalQuestionNotice(
+      validNotice.exam_id,
+      validNotice.question_id,
+    )).resolves.toBeNull();
+  });
+
   test('saves a notice with PUT, authentication, and the same payload object', async () => {
     const payload = {
       message: '  The server will trim this message.  ',
@@ -114,6 +137,10 @@ describe('question notice service requests', () => {
 
 describe.each([
   ['getQuestionNotice', (examId, questionId) => getQuestionNotice(examId, questionId)],
+  [
+    'getOptionalQuestionNotice',
+    (examId, questionId) => getOptionalQuestionNotice(examId, questionId),
+  ],
   [
     'saveQuestionNotice',
     (examId, questionId) => saveQuestionNotice(examId, questionId, {
@@ -236,6 +263,16 @@ describe('question notice API error preservation', () => {
 
     await expect(getQuestionNotice(validNotice.exam_id, validNotice.question_id))
       .rejects.toBe(apiError);
+  });
+
+  test('preserves an optional GET 404 ApiError for a missing or hidden resource', async () => {
+    const apiError = new ApiError(404, 'Question not found.');
+    apiRequest.mockRejectedValue(apiError);
+
+    await expect(getOptionalQuestionNotice(
+      validNotice.exam_id,
+      validNotice.question_id,
+    )).rejects.toBe(apiError);
   });
 
   test('preserves a PUT 409 ApiError for a draft exam', async () => {

@@ -17,7 +17,7 @@ import {
 import { ApiError } from '../api/apiClient';
 import {
   deleteQuestionNotice,
-  getQuestionNotice,
+  getOptionalQuestionNotice,
   saveQuestionNotice,
 } from '../api/questionNoticeService';
 import { listQuestions } from '../api/questionService';
@@ -29,7 +29,7 @@ vi.mock('../api/questionService', () => ({
 
 vi.mock('../api/questionNoticeService', () => ({
   deleteQuestionNotice: vi.fn(),
-  getQuestionNotice: vi.fn(),
+  getOptionalQuestionNotice: vi.fn(),
   saveQuestionNotice: vi.fn(),
 }));
 
@@ -84,15 +84,13 @@ const deferred = () => {
   return { promise, reject, resolve };
 };
 
-const noNotice = () => new ApiError(404, 'Question notice not found.');
-
 const renderEditor = (props = {}) => render(
   <QuestionNoticeEditor exam={exam} onBack={vi.fn()} {...props} />,
 );
 
 const loadWithoutNotices = async (questions = [questionOne, questionTwo]) => {
   listQuestions.mockResolvedValue(questions);
-  getQuestionNotice.mockRejectedValue(noNotice());
+  getOptionalQuestionNotice.mockResolvedValue(null);
   const result = renderEditor();
   await screen.findByRole('heading', { name: 'Questions (2)' });
   return result;
@@ -135,7 +133,7 @@ describe('question-notice loading and rendering', () => {
 
     expect(await screen.findByText('No questions are available for this published exam.'))
       .toBeInTheDocument();
-    expect(getQuestionNotice).not.toHaveBeenCalled();
+    expect(getOptionalQuestionNotice).not.toHaveBeenCalled();
   });
 
   test('orders questions by position then ID and loads each notice with exact IDs', async () => {
@@ -155,7 +153,7 @@ describe('question-notice loading and rendering', () => {
       prompt: 'Final question',
     };
     listQuestions.mockResolvedValue([finalQuestion, laterTiedQuestion, tiedQuestion]);
-    getQuestionNotice.mockRejectedValue(noNotice());
+    getOptionalQuestionNotice.mockResolvedValue(null);
 
     renderEditor();
 
@@ -168,16 +166,16 @@ describe('question-notice loading and rendering', () => {
       laterTiedQuestion.prompt,
       finalQuestion.prompt,
     ]);
-    expect(getQuestionNotice.mock.calls).toEqual([
+    expect(getOptionalQuestionNotice.mock.calls).toEqual([
       [exam.id, tiedQuestion.id],
       [exam.id, laterTiedQuestion.id],
       [exam.id, finalQuestion.id],
     ]);
   });
 
-  test('treats only 404 as no notice and displays above and below notices', async () => {
+  test('displays existing above and below notices', async () => {
     listQuestions.mockResolvedValue([questionOne, questionTwo]);
-    getQuestionNotice
+    getOptionalQuestionNotice
       .mockResolvedValueOnce(aboveNotice)
       .mockResolvedValueOnce(belowNotice);
 
@@ -188,10 +186,10 @@ describe('question-notice loading and rendering', () => {
     expect(screen.getByText(belowNotice.message)).toBeInTheDocument();
     expect(screen.getByText('Below question')).toBeInTheDocument();
 
-    getQuestionNotice.mockReset();
+    getOptionalQuestionNotice.mockReset();
   });
 
-  test('renders an explicit no-notice state for a notice GET 404', async () => {
+  test('renders an explicit no-notice state for successful empty notice responses', async () => {
     await loadWithoutNotices();
 
     expect(screen.getAllByText('No notice')).toHaveLength(2);
@@ -201,9 +199,9 @@ describe('question-notice loading and rendering', () => {
 
   test('shows a safe load error for non-404 failures and retry reloads everything', async () => {
     listQuestions.mockResolvedValue([questionOne]);
-    getQuestionNotice
+    getOptionalQuestionNotice
       .mockRejectedValueOnce(new ApiError(409, 'Published exam ownership changed.'))
-      .mockRejectedValueOnce(noNotice());
+      .mockResolvedValueOnce(null);
     const user = userEvent.setup();
 
     renderEditor();
@@ -215,7 +213,7 @@ describe('question-notice loading and rendering', () => {
 
     expect(await screen.findByText('No notice')).toBeInTheDocument();
     expect(listQuestions).toHaveBeenCalledTimes(2);
-    expect(getQuestionNotice).toHaveBeenCalledTimes(2);
+    expect(getOptionalQuestionNotice).toHaveBeenCalledTimes(2);
   });
 
   test('does not expose unexpected error details', async () => {
@@ -232,14 +230,14 @@ describe('question-notice loading and rendering', () => {
   test('does not update rendered state after unmount', async () => {
     const request = deferred();
     listQuestions.mockReturnValue(request.promise);
-    getQuestionNotice.mockRejectedValue(noNotice());
+    getOptionalQuestionNotice.mockResolvedValue(null);
     const { container, unmount } = renderEditor();
 
     unmount();
     await act(async () => request.resolve([questionOne]));
 
     expect(container).toBeEmptyDOMElement();
-    expect(getQuestionNotice).toHaveBeenCalledWith(exam.id, questionOne.id);
+    expect(getOptionalQuestionNotice).toHaveBeenCalledWith(exam.id, questionOne.id);
   });
 
   test('shows read-only metadata without question-authoring controls', async () => {
@@ -297,8 +295,8 @@ describe('adding and editing question notices', () => {
   test('saves a below notice and updates only the targeted question', async () => {
     const saved = { ...belowNotice, message: 'New notice for question two' };
     listQuestions.mockResolvedValue([questionOne, questionTwo]);
-    getQuestionNotice
-      .mockRejectedValueOnce(noNotice())
+    getOptionalQuestionNotice
+      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(belowNotice);
     saveQuestionNotice.mockResolvedValue(saved);
     const user = userEvent.setup();
@@ -320,7 +318,7 @@ describe('adding and editing question notices', () => {
 
   test('prefills editing exactly and cancel preserves the stored notice', async () => {
     listQuestions.mockResolvedValue([questionOne]);
-    getQuestionNotice.mockResolvedValue(aboveNotice);
+    getOptionalQuestionNotice.mockResolvedValue(aboveNotice);
     const user = userEvent.setup();
     renderEditor();
     await screen.findByText(aboveNotice.message);
@@ -437,7 +435,7 @@ describe('notice validation', () => {
 describe('notice deletion', () => {
   const loadExistingNotice = async () => {
     listQuestions.mockResolvedValue([questionOne]);
-    getQuestionNotice.mockResolvedValue(aboveNotice);
+    getOptionalQuestionNotice.mockResolvedValue(aboveNotice);
     renderEditor();
     await screen.findByText(aboveNotice.message);
   };
@@ -513,8 +511,8 @@ describe('pending mutation and navigation safety', () => {
   test('blocks rapid save/delete overlap and disables all notice controls and back', async () => {
     const request = deferred();
     listQuestions.mockResolvedValue([questionOne, questionTwo]);
-    getQuestionNotice
-      .mockRejectedValueOnce(noNotice())
+    getOptionalQuestionNotice
+      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(belowNotice);
     saveQuestionNotice.mockReturnValue(request.promise);
     const onBack = vi.fn();
@@ -545,9 +543,9 @@ describe('pending mutation and navigation safety', () => {
   test('disables add controls while deletion is pending', async () => {
     const request = deferred();
     listQuestions.mockResolvedValue([questionOne, questionTwo]);
-    getQuestionNotice
+    getOptionalQuestionNotice
       .mockResolvedValueOnce(aboveNotice)
-      .mockRejectedValueOnce(noNotice());
+      .mockResolvedValueOnce(null);
     deleteQuestionNotice.mockReturnValue(request.promise);
     const user = userEvent.setup();
     renderEditor();

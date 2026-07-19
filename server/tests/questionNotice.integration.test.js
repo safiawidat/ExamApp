@@ -362,6 +362,7 @@ describe('lecturer question notices', () => {
   test('requires authentication for GET, PUT, and DELETE', async () => {
     const responses = await Promise.all([
       request(app).get(noticePath()),
+      request(app).get(`${noticePath()}?allow_missing=true`),
       request(app).put(noticePath()).send({
         message: 'Unauthenticated notice',
         placement: 'above',
@@ -380,6 +381,9 @@ describe('lecturer question notices', () => {
     const responses = await Promise.all([
       request(app)
         .get(noticePath())
+        .set('Authorization', studentAuthorization),
+      request(app)
+        .get(`${noticePath()}?allow_missing=true`)
         .set('Authorization', studentAuthorization),
       request(app)
         .put(noticePath())
@@ -402,6 +406,9 @@ describe('lecturer question notices', () => {
     const responses = [
       await request(app).get(path).set('Authorization', lecturerAAuthorization),
       await request(app)
+        .get(`${path}?allow_missing=true`)
+        .set('Authorization', lecturerAAuthorization),
+      await request(app)
         .put(path)
         .set('Authorization', lecturerAAuthorization)
         .send({ message: 'Foreign notice', placement: 'above' }),
@@ -422,11 +429,16 @@ describe('lecturer question notices', () => {
       draftExam.id,
       draftQuestion.id,
     );
+    const optionalGetResponse = await request(app)
+      .get(`${noticePath(draftExam.id, draftQuestion.id)}?allow_missing=true`)
+      .set('Authorization', lecturerAAuthorization);
 
     expect(response.status).toBe(409);
+    expect(optionalGetResponse.status).toBe(409);
     expect(response.body).toEqual({
       error: 'Question notices are available only for published exams.',
     });
+    expect(optionalGetResponse.body).toEqual(response.body);
     expect(await noticeCount()).toBe(0);
   });
 
@@ -438,23 +450,33 @@ describe('lecturer question notices', () => {
         publishedExamA.id,
         questionId,
       );
+      const optionalGetResponse = await request(app)
+        .get(`${noticePath(publishedExamA.id, questionId)}?allow_missing=true`)
+        .set('Authorization', lecturerAAuthorization);
 
       expect(response.status).toBe(404);
+      expect(optionalGetResponse.status).toBe(404);
       expect(response.body).toEqual({ error: 'Question not found.' });
+      expect(optionalGetResponse.body).toEqual(response.body);
     }
     expect(await noticeCount()).toBe(0);
   });
 
-  test('returns the same missing-notice response for GET and DELETE', async () => {
+  test('preserves the default missing-notice error and supports an optional empty response', async () => {
     const getResponse = await request(app)
       .get(noticePath())
       .set('Authorization', lecturerAAuthorization);
     const deleteResponse = await request(app)
       .delete(noticePath())
       .set('Authorization', lecturerAAuthorization);
+    const optionalGetResponse = await request(app)
+      .get(`${noticePath()}?allow_missing=true`)
+      .set('Authorization', lecturerAAuthorization);
 
     expect(getResponse.status).toBe(404);
     expect(deleteResponse.status).toBe(404);
+    expect(optionalGetResponse.status).toBe(204);
+    expect(optionalGetResponse.body).toEqual({});
     expect(getResponse.body).toEqual({ error: 'Question notice not found.' });
     expect(deleteResponse.body).toEqual(getResponse.body);
   });
@@ -517,10 +539,15 @@ describe('lecturer question notices', () => {
     const response = await request(app)
       .get(noticePath())
       .set('Authorization', lecturerAAuthorization);
+    const optionalResponse = await request(app)
+      .get(`${noticePath()}?allow_missing=true`)
+      .set('Authorization', lecturerAAuthorization);
 
     expect(created.status).toBe(200);
     expect(response.status).toBe(200);
+    expect(optionalResponse.status).toBe(200);
     expect(response.body).toEqual(created.body);
+    expect(optionalResponse.body).toEqual(created.body);
     expect(Object.keys(response.body).sort()).toEqual([
       'created_at',
       'exam_id',

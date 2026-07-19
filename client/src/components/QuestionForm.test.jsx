@@ -103,7 +103,7 @@ describe('question form', () => {
     await user.click(screen.getByRole('button', { name: 'Remove option 3' }));
     expect(screen.queryByDisplayValue('Discarded option')).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Prompt'), {
+    fireEvent.change(screen.getByLabelText('Question'), {
       target: { value: '  Which value is correct?  ' },
     });
     fireEvent.change(screen.getByLabelText('Points'), { target: { value: '7' } });
@@ -133,7 +133,7 @@ describe('question form', () => {
     const user = userEvent.setup();
     render(<QuestionForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByLabelText('Prompt'), {
+    fireEvent.change(screen.getByLabelText('Question'), {
       target: { value: 'Choose a value' },
     });
     fireEvent.change(screen.getByLabelText('Option 1'), {
@@ -178,7 +178,7 @@ describe('question form', () => {
     render(<QuestionForm onSubmit={onSubmit} />);
 
     await user.selectOptions(screen.getByLabelText('Question type'), 'true_false');
-    await replaceValue(user, 'Prompt', '  The statement is valid.  ');
+    await replaceValue(user, 'Question', '  The statement is valid.  ');
     await replaceValue(user, 'Points', '2');
     await user.selectOptions(screen.getByLabelText('Correct answer'), selection);
     await user.click(screen.getByRole('button', { name: 'Add question' }));
@@ -197,7 +197,7 @@ describe('question form', () => {
     render(<QuestionForm onSubmit={onSubmit} />);
 
     await user.selectOptions(screen.getByLabelText('Question type'), 'short_answer');
-    await replaceValue(user, 'Prompt', ' Name the protocol ');
+    await replaceValue(user, 'Question', ' Name the protocol ');
     await replaceValue(user, 'Points', '4');
     await user.type(screen.getByLabelText('Reference answer'), '   ');
     await user.click(screen.getByRole('button', { name: 'Add question' }));
@@ -257,7 +257,7 @@ describe('question form', () => {
     const user = userEvent.setup();
     render(<QuestionForm question={question} onSubmit={onSubmit} onCancel={vi.fn()} />);
 
-    expect(screen.getByLabelText('Prompt')).toHaveValue(question.prompt);
+    expect(screen.getByLabelText('Question')).toHaveValue(question.prompt);
     expect(screen.getByLabelText('Points')).toHaveValue(question.points);
     await user.click(screen.getByRole('button', { name: 'Save question' }));
 
@@ -355,7 +355,7 @@ describe('question form', () => {
     const savingButton = screen.getByRole('button', { name: /Saving/ });
     expect(savingButton).toBeDisabled();
     expect(screen.getByLabelText('Question type')).toBeDisabled();
-    expect(screen.getByLabelText('Prompt')).toBeDisabled();
+    expect(screen.getByLabelText('Question')).toBeDisabled();
     expect(screen.getByLabelText('Points')).toBeDisabled();
     expect(screen.getByLabelText('Correct answer')).toBeDisabled();
     await user.click(savingButton);
@@ -373,7 +373,7 @@ describe('question form', () => {
     render(<QuestionForm question={trueFalseQuestion} onSubmit={onSubmit} disabled />);
 
     expect(screen.getByLabelText('Question type')).toBeDisabled();
-    expect(screen.getByLabelText('Prompt')).toBeDisabled();
+    expect(screen.getByLabelText('Question')).toBeDisabled();
     expect(screen.getByLabelText('Points')).toBeDisabled();
     expect(screen.getByLabelText('Correct answer')).toBeDisabled();
     const saveButton = screen.getByRole('button', { name: 'Save question' });

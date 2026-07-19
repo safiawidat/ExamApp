@@ -28,7 +28,7 @@ import {
   publishLecturerExam,
   updateLecturerExam,
 } from '../api/lecturerExamService';
-import { getQuestionNotice } from '../api/questionNoticeService';
+import { getOptionalQuestionNotice } from '../api/questionNoticeService';
 import { listQuestions } from '../api/questionService';
 import TeacherDashboard from './TeacherDashboard';
 
@@ -57,7 +57,7 @@ vi.mock('../api/questionService', () => ({
 
 vi.mock('../api/questionNoticeService', () => ({
   deleteQuestionNotice: vi.fn(),
-  getQuestionNotice: vi.fn(),
+  getOptionalQuestionNotice: vi.fn(),
   saveQuestionNotice: vi.fn(),
 }));
 
@@ -147,7 +147,7 @@ let fetchSpy;
 beforeEach(() => {
   vi.clearAllMocks();
   listQuestions.mockResolvedValue([]);
-  getQuestionNotice.mockRejectedValue(new ApiError(404, 'Question notice not found.'));
+  getOptionalQuestionNotice.mockResolvedValue(null);
   fetchSpy = vi.fn();
   vi.stubGlobal('fetch', fetchSpy);
 });
@@ -566,7 +566,10 @@ describe('lecturer exam publication', () => {
       .toBeInTheDocument();
     expect(screen.getByRole('heading', { name: publishedExam.title })).toBeInTheDocument();
     expect(listQuestions).toHaveBeenCalledWith(publishedExam.id);
-    expect(getQuestionNotice).toHaveBeenCalledWith(publishedExam.id, publishedQuestion.id);
+    expect(getOptionalQuestionNotice).toHaveBeenCalledWith(
+      publishedExam.id,
+      publishedQuestion.id,
+    );
     await user.click(screen.getByRole('button', { name: 'Back to exams' }));
     expect(screen.getByRole('heading', { name: 'Teacher Dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('button', {

@@ -55,6 +55,15 @@ export const getQuestionNotice = async (examId, questionId) => (
   }))
 );
 
+export const getOptionalQuestionNotice = async (examId, questionId) => {
+  const notice = await apiRequest(
+    `${noticePath(examId, questionId)}?allow_missing=true`,
+    { auth: true },
+  );
+
+  return notice === null ? null : validateQuestionNotice(notice);
+};
+
 export const saveQuestionNotice = async (examId, questionId, payload) => (
   validateQuestionNotice(await apiRequest(noticePath(examId, questionId), {
     method: 'PUT',

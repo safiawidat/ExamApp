@@ -215,7 +215,7 @@ const QuestionForm = ({ question = null, onSubmit, onCancel, disabled = false })
           />
         </div>
         <div className="col-12">
-          <label className="form-label" htmlFor={`${formId}-question-prompt`}>Prompt</label>
+          <label className="form-label" htmlFor={`${formId}-question-prompt`}>Question</label>
           <textarea
             id={`${formId}-question-prompt`}
             className="form-control"

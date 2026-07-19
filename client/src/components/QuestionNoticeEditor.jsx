@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ApiError } from '../api/apiClient';
 import {
   deleteQuestionNotice,
-  getQuestionNotice,
+  getOptionalQuestionNotice,
   saveQuestionNotice,
 } from '../api/questionNoticeService';
 import { listQuestions } from '../api/questionService';
@@ -26,17 +25,9 @@ const placementLabel = (placement) => (
 
 const loadQuestionNotices = async (examId) => {
   const questions = orderQuestions(await listQuestions(examId));
-  const notices = await Promise.all(questions.map(async (question) => {
-    try {
-      return await getQuestionNotice(examId, question.id);
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
-        return null;
-      }
-
-      throw error;
-    }
-  }));
+  const notices = await Promise.all(questions.map((question) => (
+    getOptionalQuestionNotice(examId, question.id)
+  )));
 
   return questions.map((question, index) => ({
     question,

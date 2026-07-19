@@ -89,6 +89,7 @@ export async function getLecturerQuestionNotice(
   examIdValue,
   questionIdValue,
   lecturerId,
+  { allowMissing = false } = {},
 ) {
   const { examId, questionId } = parseNoticeRouteIds(
     examIdValue,
@@ -97,7 +98,7 @@ export async function getLecturerQuestionNotice(
   await requirePublishedQuestion(examId, questionId, lecturerId);
   const notice = await findQuestionNotice(examId, questionId);
 
-  if (!notice) {
+  if (!notice && !allowMissing) {
     throw new HttpError(404, 'Question notice not found.');
   }
 

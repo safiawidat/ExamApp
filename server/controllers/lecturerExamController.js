@@ -3,6 +3,7 @@ import {
   editLecturerExam,
   getLecturerExam,
   listLecturerExams,
+  publishLecturerExam as publishExam,
   removeLecturerExam,
 } from '../services/lecturerExamService.js';
 
@@ -35,6 +36,19 @@ export async function getLecturerExamById(request, response, next) {
 export async function patchLecturerExam(request, response, next) {
   try {
     const exam = await editLecturerExam(
+      request.params.id,
+      request.body,
+      request.user.id,
+    );
+    return response.json(exam);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function publishLecturerExam(request, response, next) {
+  try {
+    const exam = await publishExam(
       request.params.id,
       request.body,
       request.user.id,

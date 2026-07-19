@@ -1,5 +1,6 @@
 import {
   act,
+  fireEvent,
   render,
   screen,
 } from '@testing-library/react';
@@ -96,14 +97,22 @@ describe('question form', () => {
     expect(screen.getByRole('button', { name: 'Remove option 2' })).toBeDisabled();
 
     await user.click(screen.getByRole('button', { name: 'Add option' }));
-    await user.type(screen.getByLabelText('Option 3'), 'Discarded option');
+    fireEvent.change(screen.getByLabelText('Option 3'), {
+      target: { value: 'Discarded option' },
+    });
     await user.click(screen.getByRole('button', { name: 'Remove option 3' }));
     expect(screen.queryByDisplayValue('Discarded option')).not.toBeInTheDocument();
 
-    await replaceValue(user, 'Prompt', '  Which value is correct?  ');
-    await replaceValue(user, 'Points', '7');
-    await user.type(screen.getByLabelText('Option 1'), '  First choice  ');
-    await user.type(screen.getByLabelText('Option 2'), '  Second choice  ');
+    fireEvent.change(screen.getByLabelText('Question'), {
+      target: { value: '  Which value is correct?  ' },
+    });
+    fireEvent.change(screen.getByLabelText('Points'), { target: { value: '7' } });
+    fireEvent.change(screen.getByLabelText('Option 1'), {
+      target: { value: '  First choice  ' },
+    });
+    fireEvent.change(screen.getByLabelText('Option 2'), {
+      target: { value: '  Second choice  ' },
+    });
     await user.click(screen.getByLabelText('Mark option 2 correct'));
     await user.click(screen.getByRole('button', { name: 'Add question' }));
 
@@ -124,25 +133,37 @@ describe('question form', () => {
     const user = userEvent.setup();
     render(<QuestionForm onSubmit={onSubmit} />);
 
-    await replaceValue(user, 'Prompt', 'Choose a value');
-    await user.type(screen.getByLabelText('Option 1'), 'Alpha');
-    await user.type(screen.getByLabelText('Option 2'), 'Beta');
+    fireEvent.change(screen.getByLabelText('Question'), {
+      target: { value: 'Choose a value' },
+    });
+    fireEvent.change(screen.getByLabelText('Option 1'), {
+      target: { value: 'Alpha' },
+    });
+    fireEvent.change(screen.getByLabelText('Option 2'), {
+      target: { value: 'Beta' },
+    });
     await user.click(screen.getByRole('button', { name: 'Add question' }));
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Select exactly one correct option.',
     );
 
     await user.click(screen.getByLabelText('Mark option 1 correct'));
-    await replaceValue(user, 'Option 2', ' alpha ');
+    fireEvent.change(screen.getByLabelText('Option 2'), {
+      target: { value: ' alpha ' },
+    });
     await user.click(screen.getByRole('button', { name: 'Add question' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Option text must be unique.');
 
-    await replaceValue(user, 'Option 2', '   ');
+    fireEvent.change(screen.getByLabelText('Option 2'), {
+      target: { value: '   ' },
+    });
     await user.click(screen.getByRole('button', { name: 'Add question' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Every option requires text.');
     expect(onSubmit).not.toHaveBeenCalled();
 
-    await replaceValue(user, 'Option 2', 'Beta');
+    fireEvent.change(screen.getByLabelText('Option 2'), {
+      target: { value: 'Beta' },
+    });
     await user.click(screen.getByLabelText('Mark option 2 correct'));
     expect(screen.getByLabelText('Mark option 1 correct')).not.toBeChecked();
     expect(screen.getByLabelText('Mark option 2 correct')).toBeChecked();
@@ -157,7 +178,7 @@ describe('question form', () => {
     render(<QuestionForm onSubmit={onSubmit} />);
 
     await user.selectOptions(screen.getByLabelText('Question type'), 'true_false');
-    await replaceValue(user, 'Prompt', '  The statement is valid.  ');
+    await replaceValue(user, 'Question', '  The statement is valid.  ');
     await replaceValue(user, 'Points', '2');
     await user.selectOptions(screen.getByLabelText('Correct answer'), selection);
     await user.click(screen.getByRole('button', { name: 'Add question' }));
@@ -176,7 +197,7 @@ describe('question form', () => {
     render(<QuestionForm onSubmit={onSubmit} />);
 
     await user.selectOptions(screen.getByLabelText('Question type'), 'short_answer');
-    await replaceValue(user, 'Prompt', ' Name the protocol ');
+    await replaceValue(user, 'Question', ' Name the protocol ');
     await replaceValue(user, 'Points', '4');
     await user.type(screen.getByLabelText('Reference answer'), '   ');
     await user.click(screen.getByRole('button', { name: 'Add question' }));
@@ -236,7 +257,7 @@ describe('question form', () => {
     const user = userEvent.setup();
     render(<QuestionForm question={question} onSubmit={onSubmit} onCancel={vi.fn()} />);
 
-    expect(screen.getByLabelText('Prompt')).toHaveValue(question.prompt);
+    expect(screen.getByLabelText('Question')).toHaveValue(question.prompt);
     expect(screen.getByLabelText('Points')).toHaveValue(question.points);
     await user.click(screen.getByRole('button', { name: 'Save question' }));
 
@@ -334,7 +355,7 @@ describe('question form', () => {
     const savingButton = screen.getByRole('button', { name: /Saving/ });
     expect(savingButton).toBeDisabled();
     expect(screen.getByLabelText('Question type')).toBeDisabled();
-    expect(screen.getByLabelText('Prompt')).toBeDisabled();
+    expect(screen.getByLabelText('Question')).toBeDisabled();
     expect(screen.getByLabelText('Points')).toBeDisabled();
     expect(screen.getByLabelText('Correct answer')).toBeDisabled();
     await user.click(savingButton);
@@ -352,7 +373,7 @@ describe('question form', () => {
     render(<QuestionForm question={trueFalseQuestion} onSubmit={onSubmit} disabled />);
 
     expect(screen.getByLabelText('Question type')).toBeDisabled();
-    expect(screen.getByLabelText('Prompt')).toBeDisabled();
+    expect(screen.getByLabelText('Question')).toBeDisabled();
     expect(screen.getByLabelText('Points')).toBeDisabled();
     expect(screen.getByLabelText('Correct answer')).toBeDisabled();
     const saveButton = screen.getByRole('button', { name: 'Save question' });

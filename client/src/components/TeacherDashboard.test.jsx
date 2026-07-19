@@ -25,8 +25,10 @@ import {
   createLecturerExam,
   deleteLecturerExam,
   listLecturerExams,
+  publishLecturerExam,
   updateLecturerExam,
 } from '../api/lecturerExamService';
+import { getOptionalQuestionNotice } from '../api/questionNoticeService';
 import { listQuestions } from '../api/questionService';
 import TeacherDashboard from './TeacherDashboard';
 
@@ -41,6 +43,7 @@ vi.mock('../api/lecturerExamService', () => ({
   createLecturerExam: vi.fn(),
   deleteLecturerExam: vi.fn(),
   listLecturerExams: vi.fn(),
+  publishLecturerExam: vi.fn(),
   updateLecturerExam: vi.fn(),
 }));
 
@@ -50,6 +53,12 @@ vi.mock('../api/questionService', () => ({
   listQuestions: vi.fn(),
   reorderQuestions: vi.fn(),
   updateQuestion: vi.fn(),
+}));
+
+vi.mock('../api/questionNoticeService', () => ({
+  deleteQuestionNotice: vi.fn(),
+  getOptionalQuestionNotice: vi.fn(),
+  saveQuestionNotice: vi.fn(),
 }));
 
 const lecturer = {
@@ -92,6 +101,20 @@ const draftExam = {
   question_count: 2,
 };
 
+const zeroQuestionExam = {
+  ...draftExam,
+  id: 32,
+  title: 'Empty algorithms draft',
+  question_count: 0,
+};
+
+const publishedExam = {
+  ...draftExam,
+  status: 'published',
+  updated_at: '2026-07-15T10:00:00.000Z',
+  published_at: '2026-07-15T10:00:00.000Z',
+};
+
 const deferred = () => {
   let resolve;
   let reject;
@@ -124,6 +147,7 @@ let fetchSpy;
 beforeEach(() => {
   vi.clearAllMocks();
   listQuestions.mockResolvedValue([]);
+  getOptionalQuestionNotice.mockResolvedValue(null);
   fetchSpy = vi.fn();
   vi.stubGlobal('fetch', fetchSpy);
 });
@@ -168,7 +192,7 @@ describe('lecturer exam-authoring workspace', () => {
     expect(listLecturerExams).toHaveBeenCalledTimes(1);
   });
 
-  test('renders ownership, exam projections, and no publishing controls', async () => {
+  test('renders ownership, exam projections, and draft publishing controls', async () => {
     await loadDashboard({
       examTypes: [ownedType, sharedType],
       exams: [draftExam],
@@ -190,7 +214,14 @@ describe('lecturer exam-authoring workspace', () => {
     expect(within(examRegion).getByText(
       new Date(draftExam.updated_at).toLocaleDateString(),
     )).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /publish/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `Publish ${draftExam.title}` }))
+      .toBeEnabled();
+    expect(screen.getByRole('button', {
+      name: `Manage questions for ${draftExam.title}`,
+    })).toBeInTheDocument();
+    expect(screen.queryByRole('button', {
+      name: `Manage notices for ${draftExam.title}`,
+    })).not.toBeInTheDocument();
   });
 
   test('shared exam types cannot be changed but remain selectable for an exam', async () => {
@@ -490,5 +521,203 @@ describe('draft exam management', () => {
     expect(screen.getByRole('heading', { name: draftExam.title })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Back to exams' }));
     expect(screen.getByRole('heading', { name: 'Teacher Dashboard' })).toBeInTheDocument();
+  });
+});
+
+describe('lecturer exam publication', () => {
+  test('published exams expose only separate notice management for immutable content', async () => {
+    await loadDashboard({ examTypes: [ownedType], exams: [publishedExam] });
+
+    expect(screen.getByRole('button', {
+      name: `Manage notices for ${publishedExam.title}`,
+    })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: `Publish ${publishedExam.title}` }))
+      .not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {
+      name: `Manage questions for ${publishedExam.title}`,
+    })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: `Edit ${publishedExam.title}` }))
+      .not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: `Delete ${publishedExam.title}` }))
+      .not.toBeInTheDocument();
+    expect(screen.getByText(
+      /Published exam and question content is read-only.*notices.*managed separately/i,
+    )).toBeInTheDocument();
+  });
+
+  test('opens the selected published exam notice workspace and returns to exams', async () => {
+    const publishedQuestion = {
+      id: 101,
+      exam_id: publishedExam.id,
+      position: 1,
+      question_type: 'true_false',
+      prompt: 'The selected published question',
+      points: 1,
+    };
+    listQuestions.mockResolvedValue([publishedQuestion]);
+    const user = userEvent.setup();
+    await loadDashboard({ examTypes: [ownedType], exams: [publishedExam] });
+
+    await user.click(screen.getByRole('button', {
+      name: `Manage notices for ${publishedExam.title}`,
+    }));
+
+    expect(await screen.findByRole('heading', { name: 'Question notices' }))
+      .toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: publishedExam.title })).toBeInTheDocument();
+    expect(listQuestions).toHaveBeenCalledWith(publishedExam.id);
+    expect(getOptionalQuestionNotice).toHaveBeenCalledWith(
+      publishedExam.id,
+      publishedQuestion.id,
+    );
+    await user.click(screen.getByRole('button', { name: 'Back to exams' }));
+    expect(screen.getByRole('heading', { name: 'Teacher Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('button', {
+      name: `Manage notices for ${publishedExam.title}`,
+    })).toBeInTheDocument();
+  });
+
+  test('disables publication for a zero-question draft and explains why', async () => {
+    const user = userEvent.setup();
+    await loadDashboard({
+      examTypes: [ownedType],
+      exams: [zeroQuestionExam],
+    });
+
+    const publishButton = screen.getByRole('button', {
+      name: `Publish ${zeroQuestionExam.title}`,
+    });
+    expect(publishButton).toBeDisabled();
+    expect(screen.getByText('Add at least one question before publishing.'))
+      .toBeInTheDocument();
+
+    await user.click(publishButton);
+    expect(publishLecturerExam).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Confirm publish' }))
+      .not.toBeInTheDocument();
+  });
+
+  test('opens and cancels inline publication confirmation without calling the API', async () => {
+    const user = userEvent.setup();
+    await loadDashboard({ examTypes: [ownedType], exams: [draftExam] });
+
+    await user.click(screen.getByRole('button', {
+      name: `Publish ${draftExam.title}`,
+    }));
+
+    const confirmation = screen.getByRole('alert');
+    expect(confirmation).toHaveTextContent('available as published');
+    expect(confirmation).toHaveTextContent('content will become read-only');
+    expect(confirmation).toHaveTextContent('cannot currently be undone');
+    expect(publishLecturerExam).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel publish' }));
+    expect(screen.queryByRole('button', { name: 'Confirm publish' }))
+      .not.toBeInTheDocument();
+    expect(publishLecturerExam).not.toHaveBeenCalled();
+  });
+
+  test('locks competing actions while publishing and renders the exact server response', async () => {
+    const request = deferred();
+    publishLecturerExam.mockReturnValue(request.promise);
+    const user = userEvent.setup();
+    await loadDashboard({ examTypes: [ownedType], exams: [draftExam] });
+
+    await user.click(screen.getByRole('button', {
+      name: `Publish ${draftExam.title}`,
+    }));
+    await user.click(screen.getByRole('button', { name: 'Confirm publish' }));
+
+    expect(publishLecturerExam).toHaveBeenCalledWith(draftExam.id);
+    expect(publishLecturerExam).toHaveBeenCalledTimes(1);
+    const pendingButton = screen.getByRole('button', { name: 'Publishing…' });
+    expect(pendingButton).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Create exam' })).toBeDisabled();
+    expect(screen.getByRole('button', {
+      name: `Manage questions for ${draftExam.title}`,
+    })).toBeDisabled();
+    expect(screen.getByRole('button', { name: `Edit ${draftExam.title}` }))
+      .toBeDisabled();
+    expect(screen.getByRole('button', { name: `Delete ${draftExam.title}` }))
+      .toBeDisabled();
+    expect(screen.getByText('draft')).toBeInTheDocument();
+
+    await user.click(pendingButton);
+    expect(publishLecturerExam).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      request.resolve(publishedExam);
+    });
+
+    expect(await screen.findByText('published')).toBeInTheDocument();
+    expect(screen.getByText(
+      /Published exam and question content is read-only.*notices.*managed separately/i,
+    ))
+      .toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: `Publish ${draftExam.title}` }))
+      .not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: `Edit ${draftExam.title}` }))
+      .not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: `Delete ${draftExam.title}` }))
+      .not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {
+      name: `Manage questions for ${draftExam.title}`,
+    })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', {
+      name: `Manage notices for ${publishedExam.title}`,
+    })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      `Exam “${publishedExam.title}” was published.`,
+    );
+  });
+
+  test('keeps confirmation and the draft intact after failure, then allows retry', async () => {
+    publishLecturerExam
+      .mockRejectedValueOnce(new ApiError(409, 'Exam needs at least one valid question.'))
+      .mockResolvedValueOnce(publishedExam);
+    const user = userEvent.setup();
+    await loadDashboard({ examTypes: [ownedType], exams: [draftExam] });
+
+    await user.click(screen.getByRole('button', {
+      name: `Publish ${draftExam.title}`,
+    }));
+    await user.click(screen.getByRole('button', { name: 'Confirm publish' }));
+
+    expect(await screen.findByText('Exam needs at least one valid question.'))
+      .toBeInTheDocument();
+    expect(screen.getByText('draft')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm publish' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Cancel publish' })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Confirm publish' }));
+    expect(publishLecturerExam).toHaveBeenCalledTimes(2);
+    expect(await screen.findByText('published')).toBeInTheDocument();
+  });
+
+  test('keeps edit, delete, and publication confirmations isolated', async () => {
+    const user = userEvent.setup();
+    await loadDashboard({ examTypes: [ownedType], exams: [draftExam] });
+
+    await user.click(screen.getByRole('button', { name: `Delete ${draftExam.title}` }));
+    expect(screen.getByRole('button', { name: 'Confirm delete' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', {
+      name: `Publish ${draftExam.title}`,
+    }));
+    expect(screen.getByRole('button', { name: 'Confirm publish' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm delete' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: `Delete ${draftExam.title}` }));
+    expect(screen.getByRole('button', { name: 'Confirm delete' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm publish' }))
+      .not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', {
+      name: `Publish ${draftExam.title}`,
+    }));
+    await user.click(screen.getByRole('button', { name: `Edit ${draftExam.title}` }));
+    expect(screen.getByLabelText('Edit exam title')).toHaveValue(draftExam.title);
+    expect(screen.queryByRole('button', { name: 'Confirm publish' }))
+      .not.toBeInTheDocument();
   });
 });

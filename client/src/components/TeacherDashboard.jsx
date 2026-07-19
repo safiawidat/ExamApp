@@ -9,11 +9,13 @@ import {
   createLecturerExam,
   deleteLecturerExam,
   listLecturerExams,
+  publishLecturerExam,
   updateLecturerExam,
 } from '../api/lecturerExamService';
 import ExamManager from './ExamManager';
 import ExamTypeManager from './ExamTypeManager';
 import QuestionEditor from './QuestionEditor';
+import QuestionNoticeEditor from './QuestionNoticeEditor';
 import { safeApiMessage } from './authoringUi';
 
 const loadWorkspace = () => Promise.all([
@@ -28,6 +30,7 @@ const TeacherDashboard = ({ currentUser, onOpenQuestionEditor }) => {
   const [loadError, setLoadError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [selectedExamId, setSelectedExamId] = useState(null);
+  const [selectedWorkspace, setSelectedWorkspace] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -118,7 +121,17 @@ const TeacherDashboard = ({ currentUser, onOpenQuestionEditor }) => {
 
     if (selectedExamId === examId) {
       setSelectedExamId(null);
+      setSelectedWorkspace(null);
     }
+  };
+
+  const handlePublishExam = async (examId) => {
+    const published = await publishLecturerExam(examId);
+    setExams((current) => current.map((exam) => (
+      exam.id === examId ? published : exam
+    )));
+    setSuccessMessage(`Exam “${published.title}” was published.`);
+    return published;
   };
 
   const handleOpenQuestions = (exam) => {
@@ -128,6 +141,17 @@ const TeacherDashboard = ({ currentUser, onOpenQuestionEditor }) => {
     }
 
     setSelectedExamId(exam.id);
+    setSelectedWorkspace('questions');
+  };
+
+  const handleOpenNotices = (exam) => {
+    setSelectedExamId(exam.id);
+    setSelectedWorkspace('notices');
+  };
+
+  const handleBackToExams = () => {
+    setSelectedExamId(null);
+    setSelectedWorkspace(null);
   };
 
   const handleQuestionCountChange = useCallback((questionCount) => {
@@ -140,12 +164,21 @@ const TeacherDashboard = ({ currentUser, onOpenQuestionEditor }) => {
 
   const selectedExam = exams.find((exam) => exam.id === selectedExamId);
 
-  if (selectedExam) {
+  if (selectedExam && selectedWorkspace === 'questions') {
     return (
       <QuestionEditor
         exam={selectedExam}
-        onBack={() => setSelectedExamId(null)}
+        onBack={handleBackToExams}
         onQuestionCountChange={handleQuestionCountChange}
+      />
+    );
+  }
+
+  if (selectedExam && selectedWorkspace === 'notices') {
+    return (
+      <QuestionNoticeEditor
+        exam={selectedExam}
+        onBack={handleBackToExams}
       />
     );
   }
@@ -155,7 +188,7 @@ const TeacherDashboard = ({ currentUser, onOpenQuestionEditor }) => {
       <header className="mb-4">
         <h1 className="h2">Teacher Dashboard</h1>
         <p className="text-muted mb-0">
-          Manage shared exam types and your draft exams.
+          Manage shared exam types, draft exams, and notices for published questions.
         </p>
       </header>
 
@@ -200,7 +233,9 @@ const TeacherDashboard = ({ currentUser, onOpenQuestionEditor }) => {
               onCreate={handleCreateExam}
               onUpdate={handleUpdateExam}
               onDelete={handleDeleteExam}
+              onPublish={handlePublishExam}
               onOpenQuestions={handleOpenQuestions}
+              onOpenNotices={handleOpenNotices}
             />
           </div>
         </div>

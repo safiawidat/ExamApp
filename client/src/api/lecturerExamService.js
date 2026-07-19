@@ -34,6 +34,13 @@ export const updateLecturerExam = async (examId, payload) => validateExam(
   }),
 );
 
+export const publishLecturerExam = async (examId) => validateExam(
+  await apiRequest(`/exams/${requirePositiveId(examId, 'Exam ID')}/publish`, {
+    method: 'POST',
+    auth: true,
+  }),
+);
+
 export const deleteLecturerExam = async (examId) => {
   await apiRequest(`/exams/${requirePositiveId(examId, 'Exam ID')}`, {
     method: 'DELETE',

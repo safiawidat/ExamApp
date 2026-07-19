@@ -6,6 +6,7 @@ import { accessRoutes } from './routes/accessRoutes.js';
 import { authRoutes } from './routes/authRoutes.js';
 import { examRoutes } from './routes/examRoutes.js';
 import { examTypeRoutes } from './routes/examTypeRoutes.js';
+import { studentExamRoutes } from './routes/studentExamRoutes.js';
 
 export const app = express();
 
@@ -22,6 +23,7 @@ app.get('/api/health', (request, response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/exam-types', examTypeRoutes);
 app.use('/api/exams', examRoutes);
+app.use('/api/student/exams', studentExamRoutes);
 app.use(accessRoutes);
 
 app.use(errorHandler);

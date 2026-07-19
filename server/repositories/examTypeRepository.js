@@ -111,7 +111,7 @@ export async function deleteExamType(id, createdBy) {
     return result.rowCount > 0;
   } catch (error) {
     if (
-      error?.code === '23503'
+      ['23503', '23001'].includes(error?.code)
       && error?.constraint === 'exams_exam_type_id_fkey'
     ) {
       throw new HttpError(409, 'Exam types in use by an exam cannot be deleted.');

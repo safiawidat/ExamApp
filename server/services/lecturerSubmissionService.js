@@ -6,6 +6,7 @@ import {
   findSubmissionQuestionsForGrading,
   findSubmissionsForOwnedExam,
   markSubmissionGradingInProgress,
+  publishSubmissionResult,
   reopenSubmissionGrading,
   updateSubmissionAnswerGrades,
   withLecturerGradingTransaction,
@@ -564,6 +565,66 @@ export async function reopenLecturerSubmissionGrading(
       graded_by: null,
       grading_completed_at: null,
       result_published_at: null,
+    };
+  });
+}
+
+export async function publishLecturerSubmissionResult(
+  examIdValue,
+  submissionIdValue,
+  payload,
+  lecturerId,
+) {
+  const examId = parseRouteId(examIdValue, 'Exam ID');
+  const submissionId = parseRouteId(submissionIdValue, 'Submission ID');
+  validateBodylessAction(payload, 'Result publication');
+
+  return withLecturerGradingTransaction(async (client) => {
+    await requireOwnedExam(examId, lecturerId, client);
+    const submission = await requireSubmission(
+      examId,
+      submissionId,
+      client,
+      { lock: true },
+    );
+
+    if (submission.resultPublishedAt !== null) {
+      throw new HttpError(409, 'Submission result is already published.');
+    }
+
+    if (submission.gradingState === 'ungraded') {
+      throw new HttpError(409, 'Ungraded submission results cannot be published.');
+    }
+
+    if (submission.gradingState === 'in_progress') {
+      throw new HttpError(409, 'In-progress submission results cannot be published.');
+    }
+
+    if (
+      submission.gradingState !== 'completed'
+      || submission.totalScore === null
+      || submission.gradedBy === null
+      || submission.gradingCompletedAt === null
+    ) {
+      throw new HttpError(409, 'Only fully completed grading can be published.');
+    }
+
+    const publication = await publishSubmissionResult(submissionId, client);
+
+    if (!publication) {
+      throw new HttpError(409, 'Submission result is already published.');
+    }
+
+    return {
+      id: submission.id,
+      exam_id: submission.examId,
+      grading_state: submission.gradingState,
+      total_score: submission.totalScore,
+      maximum_score: submission.maximumScore,
+      percentage: percentageFor(submission.totalScore, submission.maximumScore),
+      graded_by: submission.gradedBy,
+      grading_completed_at: submission.gradingCompletedAt,
+      result_published_at: publication.result_published_at,
     };
   });
 }

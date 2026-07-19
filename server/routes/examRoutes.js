@@ -12,6 +12,7 @@ import {
   getLecturerSubmissions,
   postLecturerSubmissionGradingComplete,
   postLecturerSubmissionGradingReopen,
+  postLecturerSubmissionResultPublish,
   putLecturerSubmissionGrading,
 } from '../controllers/lecturerSubmissionController.js';
 import {
@@ -47,6 +48,10 @@ examRoutes.post(
 examRoutes.post(
   '/:examId/submissions/:submissionId/grading/reopen',
   postLecturerSubmissionGradingReopen,
+);
+examRoutes.post(
+  '/:examId/submissions/:submissionId/result/publish',
+  postLecturerSubmissionResultPublish,
 );
 examRoutes.get('/:id', getLecturerExamById);
 examRoutes.post('/:id/publish', publishLecturerExam);

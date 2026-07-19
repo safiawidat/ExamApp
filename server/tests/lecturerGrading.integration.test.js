@@ -195,6 +195,11 @@ const gradingPath = (
   submissionId = mainSubmission.id,
 ) => `/api/exams/${examId}/submissions/${submissionId}/grading`;
 
+const publicationPath = (
+  examId = mainExam.id,
+  submissionId = mainSubmission.id,
+) => `/api/exams/${examId}/submissions/${submissionId}/result/publish`;
+
 const saveMainDraft = (snapshot = mainSnapshot()) => request(app)
   .put(gradingPath())
   .set('Authorization', lecturerAAuthorization)
@@ -202,6 +207,10 @@ const saveMainDraft = (snapshot = mainSnapshot()) => request(app)
 
 const completeMain = () => request(app)
   .post(`${gradingPath()}/complete`)
+  .set('Authorization', lecturerAAuthorization);
+
+const publishMain = () => request(app)
+  .post(publicationPath())
   .set('Authorization', lecturerAAuthorization);
 
 const completeMainWithDraft = async (snapshot = mainSnapshot()) => {
@@ -224,7 +233,13 @@ const readPersistedGrading = async (submissionId = mainSubmission.id) => {
       [submissionId],
     ),
     pool.query(
-      `SELECT question_id, awarded_points, lecturer_feedback
+      `SELECT
+         question_id,
+         selected_option_id,
+         boolean_answer,
+         text_answer,
+         awarded_points,
+         lecturer_feedback
        FROM submission_answers
        WHERE submission_id = $1
        ORDER BY question_id`,
@@ -486,6 +501,7 @@ describe('lecturer submission list and detail', () => {
       await request(app).put(`${detailPath}/grading`).send({ answers: [] }),
       await request(app).post(`${detailPath}/grading/complete`),
       await request(app).post(`${detailPath}/grading/reopen`),
+      await request(app).post(`${detailPath}/result/publish`),
     ];
 
     for (const response of responses) {
@@ -1007,6 +1023,151 @@ describe('grading completion', () => {
     expect(nonOwner.status).toBe(404);
     expect(mismatch.status).toBe(404);
     expect(mismatch.body).toEqual({ error: 'Submission not found.' });
+  });
+});
+
+describe('individual result publication', () => {
+  test('publishes completed grading without changing scores, metadata, answers, marks, or feedback', async () => {
+    const completed = await completeMainWithDraft(mainSnapshot({
+      answeredShortMark: 0.625,
+      answeredFeedback: 'Publication must preserve this feedback.',
+    }));
+    expect(completed.status).toBe(200);
+    const before = await readPersistedGrading();
+
+    const response = await publishMain();
+
+    expect(response.status).toBe(200);
+    expect(Object.keys(response.body).sort()).toEqual([
+      'exam_id',
+      'graded_by',
+      'grading_completed_at',
+      'grading_state',
+      'id',
+      'maximum_score',
+      'percentage',
+      'result_published_at',
+      'total_score',
+    ]);
+    expect(response.body).toMatchObject({
+      id: mainSubmission.id,
+      exam_id: mainExam.id,
+      grading_state: 'completed',
+      total_score: 2.625,
+      maximum_score: 7,
+      percentage: 37.5,
+      graded_by: lecturerA.id,
+      grading_completed_at: before.submission.grading_completed_at.toISOString(),
+    });
+    expect(typeof response.body.total_score).toBe('number');
+    expect(typeof response.body.maximum_score).toBe('number');
+    expect(typeof response.body.percentage).toBe('number');
+    expect(Number.isNaN(Date.parse(response.body.result_published_at))).toBe(false);
+
+    const after = await readPersistedGrading();
+    expect(after.submission).toMatchObject({
+      grading_state: before.submission.grading_state,
+      total_score: before.submission.total_score,
+      graded_by: before.submission.graded_by,
+      grading_completed_at: before.submission.grading_completed_at,
+    });
+    expect(after.submission.result_published_at.toISOString())
+      .toBe(response.body.result_published_at);
+    expect(after.answers).toEqual(before.answers);
+  });
+
+  test('enforces authentication, role, safe ownership, and submission membership', async () => {
+    const unauthenticated = await request(app).post(publicationPath());
+    const student = await request(app)
+      .post(publicationPath())
+      .set('Authorization', studentAAuthorization);
+    const nonOwner = await request(app)
+      .post(publicationPath())
+      .set('Authorization', lecturerBAuthorization);
+    const mismatch = await request(app)
+      .post(publicationPath(mainExam.id, foreignSubmission.id))
+      .set('Authorization', lecturerAAuthorization);
+
+    expect(unauthenticated.status).toBe(401);
+    expect(unauthenticated.body).toEqual({ error: 'Authentication required.' });
+    expect(student.status).toBe(403);
+    expect(student.body).toEqual({ error: 'Access forbidden.' });
+    expect(nonOwner.status).toBe(404);
+    expect(nonOwner.body).toEqual({ error: 'Exam not found.' });
+    expect(mismatch.status).toBe(404);
+    expect(mismatch.body).toEqual({ error: 'Submission not found.' });
+  });
+
+  test('returns clear conflicts for ungraded, in-progress, and already-published results', async () => {
+    const ungraded = await publishMain();
+    expect(ungraded.status).toBe(409);
+    expect(ungraded.body.error).toMatch(/ungraded/i);
+
+    const draft = await saveMainDraft();
+    expect(draft.status).toBe(200);
+    const inProgress = await publishMain();
+    expect(inProgress.status).toBe(409);
+    expect(inProgress.body.error).toMatch(/in-progress/i);
+
+    const completed = await completeMain();
+    expect(completed.status).toBe(200);
+    const published = await publishMain();
+    const repeated = await publishMain();
+    expect(published.status).toBe(200);
+    expect(repeated.status).toBe(409);
+    expect(repeated.body.error).toMatch(/already published/i);
+  });
+
+  test('rejects a non-empty body and leaves completed grading unpublished', async () => {
+    const completed = await completeMainWithDraft();
+    expect(completed.status).toBe(200);
+    const before = await readPersistedGrading();
+
+    const response = await request(app)
+      .post(publicationPath())
+      .set('Authorization', lecturerAAuthorization)
+      .send({ force: true });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/does not accept client-controlled fields/i);
+    const after = await readPersistedGrading();
+    expect(after).toEqual(before);
+    expect(after.submission.result_published_at).toBeNull();
+  });
+
+  test('serializes simultaneous publication so exactly one attempt succeeds', async () => {
+    const completed = await completeMainWithDraft();
+    expect(completed.status).toBe(200);
+
+    const responses = await Promise.all([publishMain(), publishMain()]);
+
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+    expect(responses.find((response) => response.status === 409).body.error)
+      .toMatch(/already published/i);
+    const persisted = await readPersistedGrading();
+    expect(persisted.submission.result_published_at).not.toBeNull();
+    expect(persisted.submission.grading_state).toBe('completed');
+  });
+
+  test('prevents reopening or draft edits after publication', async () => {
+    const completed = await completeMainWithDraft();
+    expect(completed.status).toBe(200);
+    const published = await publishMain();
+    expect(published.status).toBe(200);
+    const before = await readPersistedGrading();
+
+    const [reopened, edited] = await Promise.all([
+      request(app)
+        .post(`${gradingPath()}/reopen`)
+        .set('Authorization', lecturerAAuthorization),
+      saveMainDraft(mainSnapshot({ answeredShortMark: 0.25 })),
+    ]);
+
+    expect(reopened.status).toBe(409);
+    expect(reopened.body.error).toMatch(/published/i);
+    expect(edited.status).toBe(409);
+    expect(edited.body.error).toMatch(/reopened/i);
+    expect(await readPersistedGrading()).toEqual(before);
   });
 });
 

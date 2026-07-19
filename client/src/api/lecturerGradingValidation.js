@@ -6,6 +6,17 @@ const gradingStates = new Set(['ungraded', 'in_progress', 'completed']);
 const questionTypes = new Set(['multiple_choice', 'true_false', 'short_answer']);
 const answerFields = new Set(['questionId', 'awardedPoints', 'feedback']);
 const snapshotFields = new Set(['answers']);
+const publicationFields = new Set([
+  'id',
+  'exam_id',
+  'grading_state',
+  'total_score',
+  'maximum_score',
+  'percentage',
+  'graded_by',
+  'grading_completed_at',
+  'result_published_at',
+]);
 
 const invalidResponse = (resource) => new ApiError(
   500,
@@ -379,6 +390,44 @@ export const validateLecturerGradingAction = (value, expectedState) => {
   }
 
   validateScoreState(value, resource);
+
+  return {
+    id: value.id,
+    exam_id: value.exam_id,
+    grading_state: value.grading_state,
+    total_score: value.total_score,
+    maximum_score: value.maximum_score,
+    percentage: value.percentage,
+    graded_by: value.graded_by,
+    grading_completed_at: value.grading_completed_at,
+    result_published_at: value.result_published_at,
+  };
+};
+
+export const validateLecturerResultPublication = (value) => {
+  const resource = 'lecturer result publication';
+  if (
+    !isPlainObject(value)
+    || !hasOnlyFields(value, publicationFields)
+    || [...publicationFields].some((field) => !hasOwn(value, field))
+    || !isPositiveInteger(value.id)
+    || !isPositiveInteger(value.exam_id)
+    || value.grading_state !== 'completed'
+  ) {
+    throw invalidResponse(resource);
+  }
+
+  validateScoreState(value, resource);
+
+  if (
+    value.total_score === null
+    || value.percentage === null
+    || value.graded_by === null
+    || value.grading_completed_at === null
+    || value.result_published_at === null
+  ) {
+    throw invalidResponse(resource);
+  }
 
   return {
     id: value.id,

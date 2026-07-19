@@ -268,6 +268,18 @@ export async function completeSubmissionGrading(
   return result.rows[0] ?? null;
 }
 
+export async function publishSubmissionResult(submissionId, executor) {
+  const result = await executor.query(
+    `UPDATE exam_submissions
+     SET result_published_at = CURRENT_TIMESTAMP
+     WHERE id = $1 AND result_published_at IS NULL
+     RETURNING result_published_at`,
+    [submissionId],
+  );
+
+  return result.rows[0] ?? null;
+}
+
 export async function reopenSubmissionGrading(submissionId, executor) {
   const result = await executor.query(
     `UPDATE exam_submissions

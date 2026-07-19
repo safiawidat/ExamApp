@@ -3,6 +3,7 @@ import {
   completeLecturerSubmissionGrading,
   getLecturerSubmission,
   listLecturerSubmissions,
+  publishLecturerSubmissionResult,
   reopenLecturerSubmissionGrading,
   saveLecturerSubmissionGrading,
 } from '../api/lecturerGradingService';
@@ -451,6 +452,34 @@ const SubmissionReviewWorkspace = ({ exam, onBack }) => {
     }
   };
 
+  const handlePublish = async () => {
+    if (
+      pendingAction
+      || detail.grading_state !== 'completed'
+      || detail.result_published_at !== null
+    ) return;
+
+    setPendingAction('publish');
+    setDetailError('');
+    setSuccessMessage('');
+    try {
+      const published = await publishLecturerSubmissionResult(exam.id, detail.id);
+      setDetail((current) => ({ ...current, ...published }));
+      setSubmissions((current) => current.map((submission) => (
+        submission.id === published.id
+          ? { ...submission, ...gradingSummaryFields(published) }
+          : submission
+      )));
+      setConfirmation('');
+      setSuccessMessage('Result published successfully.');
+      await loadSubmissions();
+    } catch (error) {
+      setDetailError(safeApiMessage(error, 'Unable to publish the result.'));
+    } finally {
+      setPendingAction('');
+    }
+  };
+
   if (selectedSubmissionId !== null) {
     return (
       <div className="container py-4">
@@ -531,7 +560,14 @@ const SubmissionReviewWorkspace = ({ exam, onBack }) => {
             )}
             {detail.result_published_at !== null && (
               <div className="alert alert-secondary">
-                This result is published to the student. Grading is read-only and cannot be reopened.
+                <p className="fw-semibold mb-1">Result published</p>
+                <p className="mb-0">
+                  Published{' '}
+                  <time dateTime={detail.result_published_at}>
+                    {formatDateTime(detail.result_published_at)}
+                  </time>
+                  . Grading is read-only and cannot be reopened.
+                </p>
               </div>
             )}
 
@@ -570,14 +606,24 @@ const SubmissionReviewWorkspace = ({ exam, onBack }) => {
                 </>
               )}
               {isReadOnly && detail.result_published_at === null && (
-                <button
-                  className="btn btn-outline-primary"
-                  type="button"
-                  onClick={() => setConfirmation('reopen')}
-                  disabled={Boolean(pendingAction)}
-                >
-                  Reopen grading
-                </button>
+                <>
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => setConfirmation('publish')}
+                    disabled={Boolean(pendingAction)}
+                  >
+                    Publish result
+                  </button>
+                  <button
+                    className="btn btn-outline-primary"
+                    type="button"
+                    onClick={() => setConfirmation('reopen')}
+                    disabled={Boolean(pendingAction)}
+                  >
+                    Reopen grading
+                  </button>
+                </>
               )}
             </div>
 
@@ -627,6 +673,34 @@ const SubmissionReviewWorkspace = ({ exam, onBack }) => {
                     disabled={Boolean(pendingAction)}
                   >
                     Cancel reopening
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {confirmation === 'publish' && (
+              <div className="alert alert-warning mt-3" role="alert">
+                <p>
+                  Publish this result? The grade and feedback will become available to the
+                  student after the student result feature is connected. Publication is
+                  irreversible, and this grading can no longer be reopened or edited.
+                </p>
+                <div className="d-flex gap-2">
+                  <button
+                    className="btn btn-danger"
+                    type="button"
+                    onClick={handlePublish}
+                    disabled={Boolean(pendingAction)}
+                  >
+                    {pendingAction === 'publish' ? 'Publishing result…' : 'Confirm publication'}
+                  </button>
+                  <button
+                    className="btn btn-outline-secondary"
+                    type="button"
+                    onClick={() => setConfirmation('')}
+                    disabled={Boolean(pendingAction)}
+                  >
+                    Cancel publication
                   </button>
                 </div>
               </div>

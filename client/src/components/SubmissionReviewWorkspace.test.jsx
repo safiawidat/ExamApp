@@ -17,6 +17,7 @@ import {
   completeLecturerSubmissionGrading,
   getLecturerSubmission,
   listLecturerSubmissions,
+  publishLecturerSubmissionResult,
   reopenLecturerSubmissionGrading,
   saveLecturerSubmissionGrading,
 } from '../api/lecturerGradingService';
@@ -26,6 +27,7 @@ vi.mock('../api/lecturerGradingService', () => ({
   completeLecturerSubmissionGrading: vi.fn(),
   getLecturerSubmission: vi.fn(),
   listLecturerSubmissions: vi.fn(),
+  publishLecturerSubmissionResult: vi.fn(),
   reopenLecturerSubmissionGrading: vi.fn(),
   saveLecturerSubmissionGrading: vi.fn(),
 }));
@@ -155,6 +157,18 @@ const reopenedAction = {
   graded_by: null,
   grading_completed_at: null,
   result_published_at: null,
+};
+
+const publishedAction = {
+  id: completedSummary.id,
+  exam_id: exam.id,
+  grading_state: 'completed',
+  total_score: 3.5,
+  maximum_score: 4,
+  percentage: 87.5,
+  graded_by: 19,
+  grading_completed_at: completedSummary.grading_completed_at,
+  result_published_at: '2026-07-18T11:00:00.000Z',
 };
 
 const deferred = () => {
@@ -371,7 +385,8 @@ describe('completion, reopening, and unsaved work', () => {
     expect(screen.getByText(/93.75%/)).toBeInTheDocument();
     expect(screen.getByLabelText('Awarded mark for question 3 (0–1)')).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Complete grading' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /publish result/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Publish result' })).toBeInTheDocument();
+    expect(publishLecturerSubmissionResult).not.toHaveBeenCalled();
   });
 
   test('reopens unpublished completion only after confirmation and preserves grading', async () => {
@@ -402,7 +417,8 @@ describe('completion, reopening, and unsaved work', () => {
       result_published_at: '2026-07-18T11:00:00.000Z',
     };
     await openFirstSubmission(published, detailFor(published));
-    expect(screen.getByText(/published to the student.*cannot be reopened/i)).toBeInTheDocument();
+    expect(screen.getByText('Result published')).toBeInTheDocument();
+    expect(screen.getByText(/grading is read-only and cannot be reopened/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reopen grading' })).not.toBeInTheDocument();
   });
 
@@ -446,5 +462,97 @@ describe('completion, reopening, and unsaved work', () => {
     await user.click(screen.getByRole('button', { name: 'Back to exams' }));
     expect(onBack).toHaveBeenCalledTimes(1);
     confirmSpy.mockRestore();
+  });
+});
+
+describe('individual result publication', () => {
+  test.each([
+    ['ungraded', baseSummary],
+    ['in-progress', inProgressSummary],
+  ])('does not show publication for %s grading', async (_label, summary) => {
+    await openFirstSubmission(summary, detailFor(summary));
+    expect(screen.queryByRole('button', { name: 'Publish result' })).not.toBeInTheDocument();
+  });
+
+  test('requires irreversible-publication confirmation and cancellation sends no request', async () => {
+    const user = await openFirstSubmission(completedSummary, detailFor(completedSummary));
+
+    await user.click(screen.getByRole('button', { name: 'Publish result' }));
+    expect(screen.getByRole('alert')).toHaveTextContent(/available to the student after/i);
+    expect(screen.getByRole('alert')).toHaveTextContent(/irreversible/i);
+    expect(publishLecturerSubmissionResult).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel publication' }));
+    expect(screen.queryByRole('button', { name: 'Confirm publication' }))
+      .not.toBeInTheDocument();
+    expect(publishLecturerSubmissionResult).not.toHaveBeenCalled();
+  });
+
+  test('locks duplicate grading actions while publication is pending', async () => {
+    const user = await openFirstSubmission(completedSummary, detailFor(completedSummary));
+    const publication = deferred();
+    publishLecturerSubmissionResult.mockReturnValue(publication.promise);
+
+    await user.click(screen.getByRole('button', { name: 'Publish result' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm publication' }));
+
+    expect(screen.getByRole('button', { name: 'Publishing result…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Reopen grading' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Back to submissions' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Publishing result…' }));
+    expect(publishLecturerSubmissionResult).toHaveBeenCalledTimes(1);
+
+    await act(async () => publication.resolve(publishedAction));
+    expect(await screen.findByText('Result published')).toBeInTheDocument();
+  });
+
+  test('publishes, refreshes list state, shows the timestamp, and remains read-only', async () => {
+    const publishedSummary = {
+      ...completedSummary,
+      result_published_at: publishedAction.result_published_at,
+    };
+    const user = await openFirstSubmission(completedSummary, detailFor(completedSummary));
+    publishLecturerSubmissionResult.mockResolvedValue(publishedAction);
+    listLecturerSubmissions.mockResolvedValue([publishedSummary]);
+
+    await user.click(screen.getByRole('button', { name: 'Publish result' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm publication' }));
+
+    expect(publishLecturerSubmissionResult)
+      .toHaveBeenCalledWith(exam.id, completedSummary.id);
+    expect(await screen.findByRole('status')).toHaveTextContent('Result published successfully.');
+    expect(screen.getByText('Result published')).toBeInTheDocument();
+    const publishedTime = screen.getByText(
+      new Date(publishedAction.result_published_at).toLocaleString(),
+    );
+    expect(publishedTime).toHaveAttribute('datetime', publishedAction.result_published_at);
+    expect(listLecturerSubmissions).toHaveBeenCalledTimes(2);
+    expect(screen.getByLabelText('Awarded mark for question 3 (0–1)')).toBeDisabled();
+    expect(screen.getByLabelText('Lecturer feedback for question 3')).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Reopen grading' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Publish result' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /unpublish|republish|correct/i }))
+      .not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Back to submissions' }));
+    expect(await screen.findByText('Published to student')).toBeInTheDocument();
+  });
+
+  test('keeps an unpublished result available for retry after an API error', async () => {
+    const user = await openFirstSubmission(completedSummary, detailFor(completedSummary));
+    publishLecturerSubmissionResult
+      .mockRejectedValueOnce(new ApiError(503, 'Publication service unavailable.'))
+      .mockResolvedValueOnce(publishedAction);
+
+    await user.click(screen.getByRole('button', { name: 'Publish result' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm publication' }));
+
+    expect(await screen.findByText('Publication service unavailable.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Publish result' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Confirm publication' })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Confirm publication' }));
+    expect(await screen.findByText('Result published')).toBeInTheDocument();
+    expect(publishLecturerSubmissionResult).toHaveBeenCalledTimes(2);
   });
 });

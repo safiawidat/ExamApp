@@ -2,6 +2,7 @@ import {
   completeLecturerSubmissionGrading,
   getLecturerSubmission,
   listLecturerSubmissions,
+  publishLecturerSubmissionResult,
   reopenLecturerSubmissionGrading,
   saveLecturerSubmissionGrading,
 } from '../services/lecturerSubmissionService.js';
@@ -66,6 +67,23 @@ export async function postLecturerSubmissionGradingReopen(
 ) {
   try {
     return response.json(await reopenLecturerSubmissionGrading(
+      request.params.examId,
+      request.params.submissionId,
+      request.body,
+      request.user.id,
+    ));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function postLecturerSubmissionResultPublish(
+  request,
+  response,
+  next,
+) {
+  try {
+    return response.json(await publishLecturerSubmissionResult(
       request.params.examId,
       request.params.submissionId,
       request.body,

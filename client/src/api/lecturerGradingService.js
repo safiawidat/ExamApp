@@ -3,6 +3,7 @@ import {
   requireLecturerGradingPositiveId,
   validateGradingSnapshot,
   validateLecturerGradingAction,
+  validateLecturerResultPublication,
   validateLecturerSubmissionDetail,
   validateLecturerSubmissionList,
 } from './lecturerGradingValidation';
@@ -55,5 +56,14 @@ export const reopenLecturerSubmissionGrading = async (examId, submissionId) => (
       auth: true,
     }),
     'in_progress',
+  )
+);
+
+export const publishLecturerSubmissionResult = async (examId, submissionId) => (
+  validateLecturerResultPublication(
+    await apiRequest(`${submissionPath(examId, submissionId)}/result/publish`, {
+      method: 'POST',
+      auth: true,
+    }),
   )
 );

@@ -11,6 +11,7 @@ import {
   completeLecturerSubmissionGrading,
   getLecturerSubmission,
   listLecturerSubmissions,
+  publishLecturerSubmissionResult,
   reopenLecturerSubmissionGrading,
   saveLecturerSubmissionGrading,
 } from './lecturerGradingService';
@@ -137,6 +138,11 @@ const reopenedAction = {
   result_published_at: null,
 };
 
+const publishedAction = {
+  ...completedAction,
+  result_published_at: '2026-07-18T10:30:00.000Z',
+};
+
 let fetchSpy;
 
 beforeEach(() => {
@@ -180,11 +186,15 @@ describe('lecturer grading service requests', () => {
     });
   });
 
-  test('uses bodyless authenticated POST requests for complete and reopen', async () => {
-    apiRequest.mockResolvedValueOnce(completedAction).mockResolvedValueOnce(reopenedAction);
+  test('uses bodyless authenticated POST requests for complete, reopen, and publication', async () => {
+    apiRequest
+      .mockResolvedValueOnce(completedAction)
+      .mockResolvedValueOnce(reopenedAction)
+      .mockResolvedValueOnce(publishedAction);
 
     await completeLecturerSubmissionGrading(31, 81);
     await reopenLecturerSubmissionGrading(31, 81);
+    await expect(publishLecturerSubmissionResult(31, 81)).resolves.toEqual(publishedAction);
 
     expect(apiRequest).toHaveBeenNthCalledWith(
       1,
@@ -196,8 +206,16 @@ describe('lecturer grading service requests', () => {
       '/exams/31/submissions/81/grading/reopen',
       { auth: true, method: 'POST' },
     );
-    expect(apiRequest.mock.calls[0][1]).not.toHaveProperty('body');
-    expect(apiRequest.mock.calls[1][1]).not.toHaveProperty('body');
+    expect(apiRequest).toHaveBeenNthCalledWith(
+      3,
+      '/exams/31/submissions/81/result/publish',
+      { auth: true, method: 'POST' },
+    );
+    for (const call of apiRequest.mock.calls) {
+      if (call[1].method === 'POST') {
+        expect(call[1]).not.toHaveProperty('body');
+      }
+    }
   });
 
   test.each([
@@ -207,15 +225,17 @@ describe('lecturer grading service requests', () => {
     ['save submission', () => saveLecturerSubmissionGrading(31, 1.5, snapshot)],
     ['complete exam', () => completeLecturerSubmissionGrading(Number.MAX_SAFE_INTEGER, 81)],
     ['reopen submission', () => reopenLecturerSubmissionGrading(31, null)],
+    ['publication exam', () => publishLecturerSubmissionResult(-1, 81)],
+    ['publication submission', () => publishLecturerSubmissionResult(31, '81')],
   ])('rejects an invalid %s ID before requesting', async (_label, request) => {
     await expect(request()).rejects.toThrow(/positive integer/i);
     expect(apiRequest).not.toHaveBeenCalled();
   });
 
   test('preserves shared-client status and message errors', async () => {
-    const apiError = new ApiError(409, 'Completed grading must be reopened.');
+    const apiError = new ApiError(409, 'Submission result is already published.');
     apiRequest.mockRejectedValue(apiError);
-    await expect(saveLecturerSubmissionGrading(31, 81, snapshot)).rejects.toBe(apiError);
+    await expect(publishLecturerSubmissionResult(31, 81)).rejects.toBe(apiError);
   });
 });
 
@@ -286,6 +306,16 @@ describe('lecturer grading response validation', () => {
     apiRequest.mockResolvedValue({ ...completedAction, grading_state: 'in_progress' });
     await expect(completeLecturerSubmissionGrading(31, 81)).rejects.toThrow(ApiError);
   });
+
+  test.each([
+    ['malformed score', { ...publishedAction, total_score: '3.5' }],
+    ['missing publication timestamp', { ...publishedAction, result_published_at: null }],
+    ['non-completed state', { ...publishedAction, grading_state: 'in_progress' }],
+    ['unexpected field', { ...publishedAction, unexpected: true }],
+  ])('rejects a %s publication response', async (_label, malformed) => {
+    apiRequest.mockResolvedValue(malformed);
+    await expect(publishLecturerSubmissionResult(31, 81)).rejects.toThrow(ApiError);
+  });
 });
 
-export { completedAction, detail, reopenedAction, snapshot, summary };
+export { completedAction, detail, publishedAction, reopenedAction, snapshot, summary };

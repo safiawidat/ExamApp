@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
+  calculateGradePercentage,
   calculateGradeTotals,
   gradeMultipleChoiceAnswer,
   gradeTrueFalseAnswer,
@@ -71,6 +72,19 @@ describe('short-answer mark validation', () => {
 });
 
 describe('grade total calculation', () => {
+  test('derives a rounded percentage from a stored total and question count', () => {
+    expect(calculateGradePercentage(2.5, 7)).toBe(35.71);
+    expect(calculateGradePercentage(0, 7)).toBe(0);
+    expect(calculateGradePercentage(7, 7)).toBe(100);
+  });
+
+  test('rejects invalid stored totals and maximum scores', () => {
+    expect(() => calculateGradePercentage(-0.1, 7)).toThrow();
+    expect(() => calculateGradePercentage(7.1, 7)).toThrow();
+    expect(() => calculateGradePercentage(Number.NaN, 7)).toThrow();
+    expect(() => calculateGradePercentage(1, 0)).toThrow();
+  });
+
   test('calculates total, question-count maximum, and percentage', () => {
     expect(calculateGradeTotals({
       awardedMarks: [1, 0.5, 0],

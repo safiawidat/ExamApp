@@ -69,6 +69,31 @@ export function validateShortAnswerMark(mark) {
   return validateAwardedMark(mark);
 }
 
+export function calculateGradePercentage(totalAwardedPoints, maximumPoints) {
+  if (!Number.isSafeInteger(maximumPoints) || maximumPoints <= 0) {
+    throw new RangeError('Maximum points must be a positive integer.');
+  }
+
+  if (
+    typeof totalAwardedPoints !== 'number'
+    || !Number.isFinite(totalAwardedPoints)
+    || totalAwardedPoints < 0
+    || totalAwardedPoints > maximumPoints
+  ) {
+    throw new RangeError('Total awarded points must be between 0 and maximum points.');
+  }
+
+  const totalScoreUnits = Math.round(
+    (totalAwardedPoints + Number.EPSILON) * scoreScale,
+  );
+  const percentageUnits = Math.round(
+    (totalScoreUnits * 100 * percentageScale)
+      / (maximumPoints * scoreScale),
+  );
+
+  return percentageUnits / percentageScale;
+}
+
 export function calculateGradeTotals({ awardedMarks, questionCount }) {
   if (!Number.isSafeInteger(questionCount) || questionCount <= 0) {
     throw new RangeError('Question count must be a positive integer.');
@@ -85,14 +110,10 @@ export function calculateGradeTotals({ awardedMarks, questionCount }) {
   }
   const totalAwardedPoints = totalScoreUnits / scoreScale;
   const maximumPoints = questionCount;
-  const percentageUnits = Math.round(
-    (totalScoreUnits * 100 * percentageScale)
-      / (maximumPoints * scoreScale),
-  );
 
   return {
     totalAwardedPoints,
     maximumPoints,
-    percentage: percentageUnits / percentageScale,
+    percentage: calculateGradePercentage(totalAwardedPoints, maximumPoints),
   };
 }

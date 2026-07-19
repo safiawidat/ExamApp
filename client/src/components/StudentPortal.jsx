@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   getStudentExam,
+  getStudentExamResult,
   listStudentExams,
   submitStudentExam,
 } from '../api/studentExamService';
 import StudentForm from './StudentForm';
+import StudentResult from './StudentResult';
 import { safeApiMessage } from './authoringUi';
 
 const refreshFailureMessage = (
@@ -14,6 +16,10 @@ const refreshFailureMessage = (
 const StudentPortal = () => {
   const [availableExams, setAvailableExams] = useState([]);
   const [selectedExam, setSelectedExam] = useState(null);
+  const [selectedResultExam, setSelectedResultExam] = useState(null);
+  const [studentResult, setStudentResult] = useState(null);
+  const [isResultLoading, setIsResultLoading] = useState(false);
+  const [resultError, setResultError] = useState('');
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [catalogError, setCatalogError] = useState('');
@@ -24,6 +30,7 @@ const StudentPortal = () => {
   const [submissionSuccess, setSubmissionSuccess] = useState('');
   const [refreshWarning, setRefreshWarning] = useState('');
   const submissionRequest = useRef(false);
+  const resultRequestId = useRef(0);
 
   useEffect(() => {
     let isActive = true;
@@ -122,7 +129,7 @@ const StudentPortal = () => {
       if (completeExam.has_submitted) {
         setAvailableExams((currentExams) => currentExams.map((currentExam) => (
           currentExam.id === exam.id
-            ? { ...currentExam, has_submitted: true }
+            ? { ...currentExam, has_submitted: true, result_available: false }
             : currentExam
         )));
         setExamOpenError('This exam has already been submitted.');
@@ -141,6 +148,56 @@ const StudentPortal = () => {
     setSubmissionError('');
   };
 
+  const loadResult = async (exam) => {
+    const requestId = resultRequestId.current + 1;
+    resultRequestId.current = requestId;
+    setSelectedResultExam(exam);
+    setStudentResult(null);
+    setResultError('');
+    setIsResultLoading(true);
+
+    try {
+      const result = await getStudentExamResult(exam.id);
+
+      if (resultRequestId.current === requestId) {
+        setStudentResult(result);
+      }
+    } catch (error) {
+      if (resultRequestId.current === requestId) {
+        setResultError(safeApiMessage(error, 'Unable to load the result.'));
+      }
+    } finally {
+      if (resultRequestId.current === requestId) {
+        setIsResultLoading(false);
+      }
+    }
+  };
+
+  const handleOpenResult = (event) => {
+    const examId = Number(event.currentTarget.dataset.examId);
+    const exam = availableExams.find((candidate) => candidate.id === examId);
+
+    if (!exam || !exam.has_submitted || !exam.result_available) {
+      return;
+    }
+
+    void loadResult(exam);
+  };
+
+  const handleRetryResult = () => {
+    if (selectedResultExam && !isResultLoading) {
+      void loadResult(selectedResultExam);
+    }
+  };
+
+  const handleBackFromResult = () => {
+    resultRequestId.current += 1;
+    setSelectedResultExam(null);
+    setStudentResult(null);
+    setResultError('');
+    setIsResultLoading(false);
+  };
+
   const handleSubmitExam = async (answers) => {
     if (!selectedExam || submissionRequest.current) {
       return;
@@ -155,7 +212,7 @@ const StudentPortal = () => {
       await submitStudentExam(submittedExamId, answers);
       setAvailableExams((currentExams) => currentExams.map((exam) => (
         exam.id === submittedExamId
-          ? { ...exam, has_submitted: true }
+          ? { ...exam, has_submitted: true, result_available: false }
           : exam
       )));
       setSelectedExam(null);
@@ -252,10 +309,17 @@ const StudentPortal = () => {
                         <strong>Total points:</strong> {exam.total_points}
                       </p>
 
-                      {exam.has_submitted ? (
-                        <button className="btn btn-secondary" type="button" disabled>
-                          Submitted
+                      {exam.has_submitted && exam.result_available ? (
+                        <button
+                          className="btn btn-primary"
+                          type="button"
+                          data-exam-id={exam.id}
+                          onClick={handleOpenResult}
+                        >
+                          View result
                         </button>
+                      ) : exam.has_submitted ? (
+                        <p className="mb-0 fw-semibold text-muted">Result not published</p>
                       ) : (
                         <button
                           className="btn btn-primary"
@@ -284,7 +348,16 @@ const StudentPortal = () => {
     >
       <h1 className="mb-4" id="student-portal-heading">Student Portal</h1>
 
-      {selectedExam ? (
+      {selectedResultExam ? (
+        <StudentResult
+          exam={selectedResultExam}
+          result={studentResult}
+          isLoading={isResultLoading}
+          error={resultError}
+          onRetry={handleRetryResult}
+          onBack={handleBackFromResult}
+        />
+      ) : selectedExam ? (
         <StudentForm
           exam={selectedExam}
           onSubmitExam={handleSubmitExam}

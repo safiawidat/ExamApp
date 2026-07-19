@@ -6,6 +6,7 @@ import {
   validateStudentExamList,
   validateStudentSubmission,
 } from './studentExamValidation';
+import { validateStudentResult } from './studentResultValidation';
 
 export const listStudentExams = async () => validateStudentExamList(
   await apiRequest('/student/exams', { auth: true }),
@@ -18,6 +19,16 @@ export const getStudentExam = async (examId) => {
   });
 
   return validateStudentExam(response);
+};
+
+export const getStudentExamResult = async (examId) => {
+  const validatedExamId = requireStudentPositiveId(examId, 'Exam ID');
+  const response = await apiRequest(
+    `/student/exams/${validatedExamId}/result`,
+    { auth: true },
+  );
+
+  return validateStudentResult(response);
 };
 
 export const submitStudentExam = async (examId, answers) => {

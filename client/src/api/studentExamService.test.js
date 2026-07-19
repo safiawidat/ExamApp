@@ -31,6 +31,7 @@ const catalogExams = [
     question_count: 3,
     total_points: 12,
     has_submitted: false,
+    result_available: false,
   },
   {
     id: 32,
@@ -44,6 +45,7 @@ const catalogExams = [
     question_count: 0,
     total_points: 0,
     has_submitted: true,
+    result_available: false,
   },
 ];
 
@@ -84,7 +86,14 @@ const trueFalseQuestion = {
 };
 
 const studentExam = {
-  ...catalogExams[0],
+  id: catalogExams[0].id,
+  title: catalogExams[0].title,
+  description: catalogExams[0].description,
+  published_at: catalogExams[0].published_at,
+  exam_type: catalogExams[0].exam_type,
+  question_count: catalogExams[0].question_count,
+  total_points: catalogExams[0].total_points,
+  has_submitted: catalogExams[0].has_submitted,
   questions: [
     shortAnswerQuestion,
     multipleChoiceQuestion,
@@ -312,6 +321,7 @@ describe('student exam catalog response validation', () => {
       [{ ...catalogExams[0], exam_type: { id: 7, name: '' } }],
     ],
     ['an invalid submitted flag', [{ ...catalogExams[0], has_submitted: 0 }]],
+    ['an invalid result flag', [{ ...catalogExams[0], result_available: 0 }]],
     ['an out-of-range exam ID', [{ ...catalogExams[0], id: 2147483648 }]],
     ['a forbidden top-level field', [{ ...catalogExams[0], lecturer_id: 9 }]],
     [

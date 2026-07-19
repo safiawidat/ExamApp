@@ -389,6 +389,7 @@ describe('published student exam catalog', () => {
         question_count: 1,
         total_points: 7,
         has_submitted: false,
+        result_available: false,
       },
       {
         id: detailedExam.id,
@@ -399,6 +400,7 @@ describe('published student exam catalog', () => {
         question_count: 3,
         total_points: 12,
         has_submitted: true,
+        result_available: false,
       },
       {
         id: olderExam.id,
@@ -409,6 +411,7 @@ describe('published student exam catalog', () => {
         question_count: 0,
         total_points: 0,
         has_submitted: false,
+        result_available: false,
       },
     ]);
     expect(response.body.map((exam) => exam.id)).not.toContain(draftExam.id);
@@ -422,6 +425,7 @@ describe('published student exam catalog', () => {
         'id',
         'published_at',
         'question_count',
+        'result_available',
         'title',
         'total_points',
       ]);
@@ -429,6 +433,7 @@ describe('published student exam catalog', () => {
       expect(Number.isInteger(exam.question_count)).toBe(true);
       expect(Number.isInteger(exam.total_points)).toBe(true);
       expect(typeof exam.has_submitted).toBe('boolean');
+      expect(typeof exam.result_available).toBe('boolean');
     }
   });
 

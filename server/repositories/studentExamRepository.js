@@ -21,22 +21,37 @@ const studentExamProjection = `
     SELECT 1
     FROM exam_submissions es
     WHERE es.exam_id = e.id AND es.student_id = $1
-  ) AS has_submitted
+  ) AS has_submitted,
+  EXISTS (
+    SELECT 1
+    FROM exam_submissions es
+    WHERE es.exam_id = e.id
+      AND es.student_id = $1
+      AND es.result_published_at IS NOT NULL
+  ) AS result_available
 `;
 
-const mapStudentExam = (row) => ({
-  id: row.id,
-  title: row.title,
-  description: row.description,
-  published_at: row.published_at,
-  exam_type: {
-    id: row.exam_type_id,
-    name: row.exam_type_name,
-  },
-  question_count: row.question_count,
-  total_points: row.total_points,
-  has_submitted: row.has_submitted,
-});
+const mapStudentExam = (row, { includeResultAvailability = false } = {}) => {
+  const exam = {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    published_at: row.published_at,
+    exam_type: {
+      id: row.exam_type_id,
+      name: row.exam_type_name,
+    },
+    question_count: row.question_count,
+    total_points: row.total_points,
+    has_submitted: row.has_submitted,
+  };
+
+  if (includeResultAvailability) {
+    exam.result_available = row.result_available;
+  }
+
+  return exam;
+};
 
 const mapSafeQuestion = (row, options) => {
   const question = {
@@ -75,7 +90,9 @@ export async function findPublishedExamsForStudent(studentId) {
     [studentId],
   );
 
-  return result.rows.map(mapStudentExam);
+  return result.rows.map((row) => mapStudentExam(row, {
+    includeResultAvailability: true,
+  }));
 }
 
 export async function findPublishedExamForStudent(examId, studentId) {

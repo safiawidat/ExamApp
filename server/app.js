@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express from 'express';
+import helmet from 'helmet';
 import { config } from './config.js';
 import { pool } from './db/pool.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -22,6 +23,7 @@ export const createApp = ({
     return callback(null, false);
   };
 
+  application.use(helmet());
   application.use(cors({ origin: corsOrigin }));
   application.use(express.json({ limit: '100kb' }));
 
@@ -43,6 +45,10 @@ export const createApp = ({
   application.use('/api/exams', examRoutes);
   application.use('/api/student/exams', studentExamRoutes);
   application.use(accessRoutes);
+
+  application.use((request, response) => (
+    response.status(404).json({ error: 'Not found.' })
+  ));
 
   application.use(errorHandler);
 

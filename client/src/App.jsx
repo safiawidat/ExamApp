@@ -11,7 +11,6 @@ import {
   logout,
   registerStudent,
 } from './api/authService';
-import './App.css';
 
 const validUserRoles = new Set(['student', 'lecturer']);
 const invalidSessionMessage = 'Your session is no longer valid. Please log in again.';

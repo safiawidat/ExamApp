@@ -2,6 +2,8 @@
 
 ## Project overview
 
+note: The client application has its own README at client/README.md, covering its component structure, API adapters, and local setup in more detail.
+
 ExamApp is a full-stack examination application built with a React client, an Express API, and PostgreSQL. The current implementation includes Milestones 1–3: public student registration, controlled lecturer creation, JWT authentication, lecturer-owned exam authoring, publication, separate question notices, student-safe exam delivery, and one final submission per student per exam.
 
 Submitted answers are stored but are not graded. Scores, feedback, grading workflows, and results views are not implemented.

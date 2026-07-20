@@ -114,6 +114,32 @@ describe('database health', () => {
   });
 });
 
+describe('unknown routes', () => {
+  test('returns a safe JSON 404 body for an unmatched route', async () => {
+    const { app } = createTestApplication();
+    const response = await request(app).get('/api/does-not-exist');
+
+    expect(response.status).toBe(404);
+    expect(response.headers['content-type']).toMatch(/application\/json/);
+    expect(response.body).toEqual({ error: 'Not found.' });
+    expect(response.text).not.toContain('Cannot GET');
+  });
+
+  test('returns the same JSON 404 body for every unmatched method and path', async () => {
+    const { app } = createTestApplication();
+    const responses = await Promise.all([
+      request(app).post('/api/does-not-exist'),
+      request(app).delete('/unknown'),
+      request(app).put('/'),
+    ]);
+
+    for (const response of responses) {
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({ error: 'Not found.' });
+    }
+  });
+});
+
 describe('application initialization', () => {
   test('preserves the authentication boundary on mounted protected routes', async () => {
     const { app } = createTestApplication();

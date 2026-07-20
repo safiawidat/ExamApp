@@ -96,7 +96,11 @@ const SubmissionSummary = ({ submission, onOpen, disabled }) => (
         </p>
         <dl className="row small mb-0">
           <dt className="col-sm-5">Grading status</dt>
-          <dd className="col-sm-7">{gradingLabels[submission.grading_state]}</dd>
+          <dd className="col-sm-7">
+            <span className={`status-badge status-badge--${submission.grading_state}`}>
+              {gradingLabels[submission.grading_state]}
+            </span>
+          </dd>
           <dt className="col-sm-5">Score</dt>
           <dd className="col-sm-7">
             {submission.grading_state === 'completed'

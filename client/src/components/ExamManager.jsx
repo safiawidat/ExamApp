@@ -287,7 +287,11 @@ const ExamManager = ({
                             <dt className="col-sm-4">Exam type</dt>
                             <dd className="col-sm-8">{exam.exam_type.name}</dd>
                             <dt className="col-sm-4">Status</dt>
-                            <dd className="col-sm-8 text-capitalize">{exam.status}</dd>
+                            <dd className="col-sm-8">
+                              <span className={`status-badge status-badge--${exam.status}`}>
+                                {exam.status}
+                              </span>
+                            </dd>
                             <dt className="col-sm-4">Questions</dt>
                             <dd className="col-sm-8">{exam.question_count}</dd>
                             <dt className="col-sm-4">Updated</dt>

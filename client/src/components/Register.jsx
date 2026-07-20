@@ -1,46 +1,35 @@
 import { useState } from 'react';
-import storage from '../services/storageService';
 
-const Register = ({ onBackToLogin }) => {
+const Register = ({ onRegister, onBackToLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('student');
-  const [success, setSuccess] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleRegister = () => {
-    setSuccess('');
+  const handleRegister = async (event) => {
+    event.preventDefault();
+
+    if (isSubmitting) {
+      return;
+    }
+
     setError('');
 
-    if (!username.trim() || !password.trim()) {
-      setError('Please enter username and password');
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
       return;
     }
 
-    const users = storage.get('users', []);
+    setIsSubmitting(true);
 
-    const userExists = users.some(
-      (user) => user.username === username.trim()
-    );
-
-    if (userExists) {
-      setError('Username already exists');
-      return;
+    try {
+      await onRegister({ username: username.trim(), password });
+    } catch (requestError) {
+      setError(requestError?.message || 'Unable to register. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const newUser = {
-      username: username.trim(),
-      password: password.trim(),
-      role,
-    };
-
-    storage.save('users', [...users, newUser]);
-
-    setSuccess('User registered successfully');
-
-    setUsername('');
-    setPassword('');
-    setRole('student');
   };
 
   return (
@@ -49,41 +38,51 @@ const Register = ({ onBackToLogin }) => {
         <div className="col-md-4">
           <div className="card shadow">
             <div className="card-header bg-success text-white">
-              <h4 className="mb-0">Register New User</h4>
+              <h4 className="mb-0">Register Student</h4>
             </div>
 
-            <div className="card-body">
+            <form className="card-body" onSubmit={handleRegister}>
               <div className="mb-3">
-                <label className="form-label">Username</label>
+                <label className="form-label" htmlFor="register-username">Username</label>
                 <input
+                  id="register-username"
                   type="text"
                   className="form-control"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
+                  required
                 />
               </div>
 
               <div className="mb-3">
-                <label className="form-label">Password</label>
+                <label className="form-label" htmlFor="register-password">Password</label>
                 <input
+                  id="register-password"
                   type="password"
                   className="form-control"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
+                  minLength="8"
+                  required
                 />
               </div>
 
               <div className="mb-3">
-                <label className="form-label">Role</label>
-
-                <select
-                  className="form-select"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                >
-                  <option value="student">Student</option>
-                  <option value="teacher">Teacher</option>
-                </select>
+                <label className="form-label" htmlFor="register-confirm-password">
+                  Confirm Password
+                </label>
+                <input
+                  id="register-confirm-password"
+                  type="password"
+                  className="form-control"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                  minLength="8"
+                  required
+                />
               </div>
 
               {error && (
@@ -92,26 +91,23 @@ const Register = ({ onBackToLogin }) => {
                 </div>
               )}
 
-              {success && (
-                <div className="alert alert-success">
-                  {success}
-                </div>
-              )}
-
               <button
                 className="btn btn-success w-100 mb-2"
-                onClick={handleRegister}
+                type="submit"
+                disabled={isSubmitting}
               >
-                Register
+                {isSubmitting ? 'Registering...' : 'Register'}
               </button>
 
               <button
                 className="btn btn-outline-secondary w-100"
+                type="button"
                 onClick={onBackToLogin}
+                disabled={isSubmitting}
               >
                 Back to Login
               </button>
-            </div>
+            </form>
           </div>
         </div>
       </div>

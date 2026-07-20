@@ -4,35 +4,49 @@
 
 note: The client application has its own README at client/README.md, covering its component structure, API adapters, and local setup in more detail.
 
-ExamApp is a full-stack examination application built with a React client, an Express API, and PostgreSQL. The current implementation includes Milestones 1–3: public student registration, controlled lecturer creation, JWT authentication, lecturer-owned exam authoring, publication, separate question notices, student-safe exam delivery, and one final submission per student per exam.
+ExamApp is a full-stack examination application built with a React client, an Express API, and PostgreSQL. The implementation covers the complete exam lifecycle: public student registration, controlled lecturer creation, JWT authentication, lecturer-owned exam authoring, publication, separate question notices, student-safe exam delivery, one final submission per student per exam, lecturer grading of submissions, and publication of results back to students.
 
-Submitted answers are stored but are not graded. Scores, feedback, grading workflows, and results views are not implemented.
+## Live deployment
+
+| Component | URL |
+| --- | --- |
+| Client | https://examapp-bs77.onrender.com |
+| API | https://examapp-x1fb.onrender.com |
+| API health check | https://examapp-x1fb.onrender.com/api/health |
+| Database | PostgreSQL, hosted on Neon |
+
+Both services are hosted on Render; the client is a static site build, the API is a Render web service. `/api/health` runs `SELECT 1` against Neon and is used as the platform health check, so a `200 {"status":"ok"}` response confirms the API, its environment configuration, and the database connection together.
 
 ## Implemented functionality
 
-- Students can register, log in, restore a browser session, log out, browse published exams, open a student-safe exam, and submit one final answer set.
+- Students can register, log in, restore a browser session, log out, browse published exams, open a student-safe exam, submit one final answer set, and view their published grade and per-question feedback once a lecturer publishes results.
 - Lecturers use controlled seeded accounts and can manage their own exam types, use shared exam types, create owned draft exams, and author multiple-choice, true/false, and short-answer questions.
 - Draft questions can be updated, deleted with position compaction, and reordered.
 - A non-empty draft exam can be published once. Published exam content is immutable, and no unpublish workflow exists.
 - From an owned published exam, a lecturer can open the notice workspace, review questions in stored order, see each existing notice or a `No notice` state, and add, edit, or delete a notice with `above` or `below` placement.
 - Notices are separate records delivered to students independently of immutable question content. Managing a notice never edits the published exam or question.
-- Student responses never contain correctness flags, correct answers, or reference answers.
+- Lecturers review submissions for an owned exam, award per-question marks (multiple-choice and true/false are calculated automatically; short answer is scored manually), mark grading complete, and can reopen a completed grading pass before publishing.
+- Lecturers publish a completed grading result to the submitting student; publication is only possible after grading is marked complete.
+- Student responses never contain correctness flags, correct answers, or reference answers before a result is published.
 
 ## Architecture
 
 ```text
-React client  ->  Express API  ->  PostgreSQL
+React client (Render static site)  ->  Express API (Render web service)  ->  PostgreSQL (Neon)
 ```
 
-The React client sends JSON requests to the Express API. Express validates payloads, authenticates bearer tokens, enforces roles and ownership, and delegates persistence to PostgreSQL repositories. PostgreSQL is the source of truth for users, roles, exam types, exams, questions, multiple-choice options, question notices, exam submissions, and submission answers.
+The React client sends JSON requests to the Express API. Express validates payloads, authenticates bearer tokens, enforces roles and ownership, and delegates persistence to PostgreSQL repositories. PostgreSQL is the source of truth for users, roles, exam types, exams, questions, multiple-choice options, question notices, exam submissions, submission answers, and grading/result state.
 
-The preserved `microservices/` homework demonstration is separate from the primary ExamApp runtime.
+Full architecture diagrams (overall, client-only, server-only, and deployment) are in [`docs/architecture.md`](docs/architecture.md).
+
+The preserved `microservices/` homework demonstration is a separate, self-contained module and is not part of the primary ExamApp runtime — see [`microservices/README.md`](microservices/README.md).
 
 ## Repository structure
 
 - `client/` — React and Vite client, API adapters, validation, components, and client tests
 - `server/` — Express routes, controllers, services, repositories, migrations, scripts, and integration tests
 - `docker/` — local PostgreSQL image, base schema, and development Compose configuration
+- `docs/` — architecture, ERD, API reference, sequence diagrams, and project documentation
 - `microservices/` — preserved homework demonstration; not the ExamApp runtime
 
 ## Roles and authorization
@@ -47,6 +61,8 @@ The preserved `microservices/` homework demonstration is separate from the prima
 - Publishes an owned exam only after it contains at least one question.
 - Cannot edit, delete, or reorder published exam content, and cannot unpublish an exam.
 - Can open `Manage notices` only for an owned published exam, manage a separate above/below notice for each question, and return to the exam dashboard.
+- Lists and opens submissions for an owned exam, awards a per-question mark for each answer, marks a submission's grading `completed`, and may `reopen` a completed grading pass to correct it before publishing.
+- Publishes a result only from `completed` grading state; publication is irreversible through the API.
 
 Owner-scoped reads and mutations hide another lecturer's resources with `404` where applicable.
 
@@ -56,8 +72,9 @@ Owner-scoped reads and mutations hide another lecturer's resources with `404` wh
 - Views only published exams.
 - Opens student-safe exam details and submits one final answer set.
 - Sees whether the authenticated student has already submitted each exam.
+- Views a published result for a submitted exam, including total score, percentage, and per-question feedback where entered by the lecturer.
 - Cannot access lecturer endpoints.
-- Never receives correct answers, reference answers, option correctness, scores, feedback, or results.
+- Never receives correct answers, reference answers, option correctness, scores, feedback, or results before the lecturer publishes them.
 
 ## Prerequisites
 
@@ -72,13 +89,14 @@ Copy `server/.env.example` to `server/.env` and `client/.env.example` to `client
 For the server, configure:
 
 - `PORT`
-- `DATA_SOURCE=postgres`
-- `DATABASE_URL`
+- `DATABASE_URL` — must include `sslmode=require` (or set `DB_SSL=true`) when pointing at a hosted database such as Neon
 - `DB_SSL`
-- `JWT_SECRET`
+- `JWT_SECRET` — at least 32 characters; a short value or a known placeholder (e.g. `changeme`, `secret`) is rejected at startup in production
 - `JWT_EXPIRES_IN`
 - `CLIENT_ORIGIN`
 - `SEED_LECTURER_USERNAME` and `SEED_LECTURER_PASSWORD` when running the seed command
+
+PostgreSQL is the only supported data source; the legacy `DATA_SOURCE` switch and its JSON-file fallback have been removed.
 
 For the client, `VITE_API_BASE_URL` must point to the local API base, including `/api`. The client uses the local default only when that variable is absent.
 
@@ -98,7 +116,7 @@ docker compose -f docker/compose.dev.yaml up -d --build
 
 Wait until the `postgres` service is healthy. The PostgreSQL image initializes the base `users` table and the migrations copied into the image when a new volume is created. After configuring `server/.env`, always run the migration command to apply every pending version, including migrations 003 and 004.
 
-## Migrations 001–004
+## Migrations 001–005
 
 From `server/`:
 
@@ -112,6 +130,7 @@ The migration runner loads numbered SQL files in order, uses a transaction and a
 - **002 — question types:** replaces the original question-type constraints with `multiple_choice`, `true_false`, and `short_answer`. Multiple-choice correctness stays on options, true/false stores an exact Boolean representation, and short answer stores trimmed non-empty reference text. Ambiguous legacy `open_text` rows stop migration.
 - **003 — final submissions:** creates `exam_submissions` and `submission_answers`. `(exam_id, student_id)` is unique. The submission service writes exactly one answer row for every exam question, while the answer primary key prevents more than one row for the same submission/question pair. Selected-option, Boolean, and text answers are stored in separate nullable columns; a row with all three values null represents an unanswered question. Composite foreign keys keep submissions, exams, questions, and options aligned. Checks plus `examapp_validate_submission_answer()` enforce answer shape, and the API writes the submission transactionally.
 - **004 — question notices:** creates separate `question_notices` storage with one notice per question and a composite exam/question relationship. Messages must be trimmed, non-empty, and at most 1000 characters. Placement is `above` or `below`. An update trigger maintains `updated_at`. Notices remain independent of immutable published question content.
+- **005 — grading and results:** adds `awarded_points` (0–1) and `lecturer_feedback` to `submission_answers`, and `grading_state`, `total_score`, `graded_by`, `grading_completed_at`, and `result_published_at` to `exam_submissions`. Check constraints enforce that grading fields are populated together only once `grading_state = 'completed'`, that `grading_completed_at` cannot precede submission time, and that `result_published_at` can only be set once grading is complete and scored.
 
 ## Server installation and startup
 
@@ -185,8 +204,16 @@ Every endpoint below requires a lecturer bearer token.
 | `GET` | `/api/exams/:examId/questions/:questionId/notice` | Read the notice for a question on an owned published exam |
 | `PUT` | `/api/exams/:examId/questions/:questionId/notice` | Create or replace that question's notice |
 | `DELETE` | `/api/exams/:examId/questions/:questionId/notice` | Delete that question's notice |
+| `GET` | `/api/exams/:examId/submissions` | List submissions for an owned exam |
+| `GET` | `/api/exams/:examId/submissions/:submissionId` | Read one submission, its answers, and current grading state |
+| `PUT` | `/api/exams/:examId/submissions/:submissionId/grading` | Save per-question awarded marks and optional feedback |
+| `POST` | `/api/exams/:examId/submissions/:submissionId/grading/complete` | Mark grading complete and calculate the total score |
+| `POST` | `/api/exams/:examId/submissions/:submissionId/grading/reopen` | Reopen a completed (not yet published) grading pass |
+| `POST` | `/api/exams/:examId/submissions/:submissionId/result/publish` | Publish the completed result to the student |
 
 Notice writes accept only `message` and `placement`; placement must be `above` or `below`. Notice access is available only for owned published exams.
+
+Multiple-choice and true/false answers are scored automatically by `gradingCalculator.js` against stored correctness; short-answer marks are entered manually by the lecturer as a value from 0 to 1 per question. `grading/complete` is only permitted once every question has an awarded mark, and calculates `total_score` as the sum of awarded marks out of the question count. `result/publish` is only permitted from `grading_state = 'completed'`.
 
 ### Student delivery and submission
 
@@ -197,6 +224,7 @@ Every endpoint below requires a student bearer token.
 | `GET` | `/api/student/exams` | List published exams and the authenticated student's submitted state |
 | `GET` | `/api/student/exams/:id` | Load a published exam with ordered student-safe questions |
 | `POST` | `/api/student/exams/:id/submissions` | Store the authenticated student's one final submission |
+| `GET` | `/api/student/exams/:examId/result` | Read the authenticated student's published result for a submitted exam, if published |
 
 ### Important status behavior
 
@@ -253,19 +281,22 @@ The lecturer dashboard loads shared exam types and owned exams from the API. Dra
 
 `client/src/components/QuestionNoticeEditor.jsx` loads published questions in stored order and shows each existing notice or a `No notice` state. Lecturers can add a notice, choose `above` or `below`, edit or delete it, and return to the exam dashboard. Notice controls and back navigation lock while a mutation is pending. `client/src/api/questionNoticeService.js` performs authenticated notice reads, saves, and deletions and validates notice responses. Notices remain separate records, so this workspace does not expose question-content editing controls or alter immutable published content.
 
-The student portal uses `studentExamService.js`, not local exam data. It loads the catalog first, then full exam detail on demand. `StudentForm` renders notices above or below their question, preserves Boolean `false`, represents every question in the final payload, and handles confirmation, pending, error, success, and catalog-refresh states. Submitted exams are disabled. No score or results screen exists.
+The student portal uses `studentExamService.js`, not local exam data. It loads the catalog first, then full exam detail on demand. `StudentForm` renders notices above or below their question, preserves Boolean `false`, represents every question in the final payload, and handles confirmation, pending, error, success, and catalog-refresh states. Submitted exams are disabled.
+
+`client/src/components/SubmissionReviewWorkspace.jsx` lists an owned exam's submissions and lets a lecturer open one, award a mark per question (multiple-choice and true/false show the calculated mark; short answer is entered manually), add optional per-question feedback, save progress, mark grading complete, reopen a completed pass, and publish the result. `client/src/api/lecturerGradingService.js` performs the authenticated grading reads and writes and validates responses.
+
+`client/src/components/StudentResult.jsx` requests `/api/student/exams/:examId/result` for a submitted exam. Before a lecturer publishes, the API returns `404` and the component shows a pending state; once published, it renders total score, percentage, and per-question feedback. `client/src/api/studentResultValidation.js` validates the published-result response shape.
 
 ## Testing and validation
 
 Approved validation totals for the current implementation:
 
-- Client: **19 test files, 289/289 tests passed** across repeated ordinary `npm.cmd run test:run` runs and an explicit `--maxWorkers=1` serial run
-- Client Vitest configuration: `maxWorkers: 2` provides a deterministic worker cap for the ordinary test command
-- Client lint: passed with zero warnings/errors
-- Client production build: passed with 38 modules transformed
-- Server: **8 test files, 166/166 tests passed** against isolated PostgreSQL
-- HTTP smoke: **99/99 checks passed**
-- Database: migrations 001–004 passed on a fresh disposable PostgreSQL database; rerunning reported the schema was already up to date
+- Client: **20 test files, 404/404 tests passed** via `npm.cmd run test:run`
+- Server: **14 test files, 304/304 tests passed** against isolated PostgreSQL, including a JSON `404` regression test
+- Combined: **34 test files, 708/708 tests passed**
+- Database: migrations 001–005 verified applied, in order, on the live Neon database via `schema_migrations`; `/api/health` confirms live connectivity
+
+These totals reflect the codebase after the final dead-code cleanup (four unused client services and their tests removed) and the addition of Helmet and a JSON `404` handler.
 
 Client commands:
 
@@ -292,38 +323,7 @@ npm.cmd run test:run
 
 ## Manual browser smoke checklist
 
-- [ ] Register a student and confirm automatic student sign-in.
-- [ ] Log in as a student and as a seeded lecturer with the appropriate accounts.
-- [ ] Refresh after login and confirm session restoration through `/api/auth/me`.
-- [ ] Log out and confirm the JWT is removed from the browser session.
-- [ ] Create, update, and delete an unused owned exam type.
-- [ ] Confirm another lecturer's exam type is usable but not editable or deletable.
-- [ ] Create and edit an owned draft exam using an owned or shared exam type.
-- [ ] Create and edit multiple-choice, true/false, and short-answer questions.
-- [ ] Verify Boolean `false` is preserved while authoring and answering.
-- [ ] Reorder questions, delete a middle question, and confirm positions compact correctly.
-- [ ] Confirm publishing a zero-question exam is rejected.
-- [ ] Publish a non-empty draft and confirm it becomes available to students.
-- [ ] Confirm published metadata, questions, options, answers, order, and deletion are read-only.
-- [ ] Open `Manage notices` for an owned published exam.
-- [ ] Confirm questions appear in their stored order and missing notices display `No notice`.
-- [ ] Add a notice with `above` placement and verify it appears above the question in the student view.
-- [ ] Change the notice placement to `below` and verify the student view updates appropriately.
-- [ ] Edit the notice message and verify the updated message reaches the student view.
-- [ ] Delete the notice and verify it is removed from the student view.
-- [ ] Confirm no question-content editing controls appear in the notice workspace.
-- [ ] Confirm notice controls and back navigation lock while a save or delete is pending.
-- [ ] Confirm `Back to exams` returns to the exam list.
-- [ ] Confirm the student catalog contains only published exams in server order.
-- [ ] Open exam detail and confirm no correctness or reference-answer fields are exposed.
-- [ ] Answer all three types, including Boolean `false`, and verify the confirmation summary.
-- [ ] Leave at least one question unanswered and confirm it is included explicitly in the final request.
-- [ ] Complete a final submission and confirm the exam becomes disabled as submitted.
-- [ ] Confirm another submission by the same student is prevented.
-- [ ] Confirm a second student has independent catalog and submitted state.
-- [ ] Confirm students cannot access lecturer endpoints and lecturers cannot access student endpoints.
-- [ ] Confirm no grade, score, feedback, result, correctness data, token, password, or secret is displayed.
-- [ ] Confirm the browser console has no unexpected errors or secret exposure.
+A full manual smoke-test checklist covering authentication, authoring, publication, notices, student delivery, grading, and result publication is in [`docs/testing.md`](docs/testing.md).
 
 ## Security notes
 
@@ -332,18 +332,21 @@ npm.cmd run test:run
 - JWTs are signed with an environment secret and sent as bearer tokens. The client stores only the JWT in `sessionStorage`.
 - Protected requests reload the current user from PostgreSQL before role checks.
 - Lecturer exam access is owner-scoped, while exam-type mutations are creator-scoped.
-- SQL uses parameterized queries. Publishing, question mutations, migrations, and submissions use transactional safeguards where consistency spans multiple records.
-- Student projections and client response validation reject private correctness, reference-answer, score, feedback, and identity fields.
-- Use HTTPS and an exact allowed client origin in deployed environments. Never expose secrets in source, logs, screenshots, or URLs.
+- SQL uses parameterized queries. Publishing, question mutations, migrations, submissions, and grading completion/publication use transactional safeguards where consistency spans multiple records.
+- Student projections and client response validation reject private correctness, reference-answer, score, and feedback fields until a lecturer publishes a result, and always reject identity fields belonging to other users.
+- `config.js` refuses to start in production with a missing, short (under 32 characters), or known-placeholder `JWT_SECRET`.
+- Helmet sets standard security headers on all API responses; CORS is locked to a single configured `CLIENT_ORIGIN`.
+- Unmatched routes return a JSON `404` body rather than falling through to a default HTML error page, keeping the API's error contract consistent for every response.
+- Server logs record only error name and error code, never request bodies, credentials, or stack traces containing secrets.
+- The deployed API uses HTTPS (Render) and connects to Neon over TLS (`DB_SSL`/`sslmode=require`). `CLIENT_ORIGIN` is set to the deployed client's exact origin. Never expose secrets in source, logs, screenshots, or URLs.
 - JWT revocation beyond client-side token removal is not currently implemented.
 
 ## Current limitations
 
 - No unpublish workflow or unpublish endpoint exists.
-- No automated or manual grading is implemented.
-- There are no scores, feedback, or results views.
 - Submitted answers cannot be revised after final submission.
-- Final deployment is not yet documented or complete; no deployment URL is approved.
+- Once a result is published, there is no API endpoint to unpublish it or edit a published grade; corrections require reopening grading before publication only.
+- JWT revocation beyond client-side token removal is not implemented; a token remains valid until it expires.
 - The preserved `microservices/` homework demonstration remains separate from the primary runtime.
 
 ## Git workflow
@@ -351,7 +354,7 @@ npm.cmd run test:run
 Development follows a feature workflow:
 
 ```text
-feature branch  ->  review / pull request  ->  dev  ->  later release to main
+feature branch  ->  pull request  ->  dev  ->  release pull request  ->  main
 ```
 
-The current implementation includes Milestones 1–3. Documentation does not assume that a particular feature branch has already been merged into `dev` or `main`.
+Each milestone was developed on its own feature branch and merged into `dev` through a pull request: `feature/initialServer`, `feature/auth-foundation`, `feature/exam-authoring`, `feature/exam-delivery-submission`, `feature/grading-results`, `feature/docker-config`, and `feature/microservices` (preserved as a separate homework demonstration, not merged into the runtime). Final documentation and cleanup were completed on `feature/final-documentation` before release to `main`. See [`docs/milestones.md`](docs/milestones.md) for the full milestone-by-milestone history.

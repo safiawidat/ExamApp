@@ -37,7 +37,7 @@ React client (Render static site)  ->  Express API (Render web service)  ->  Pos
 
 The React client sends JSON requests to the Express API. Express validates payloads, authenticates bearer tokens, enforces roles and ownership, and delegates persistence to PostgreSQL repositories. PostgreSQL is the source of truth for users, roles, exam types, exams, questions, multiple-choice options, question notices, exam submissions, submission answers, and grading/result state.
 
-Full architecture diagrams (overall, client-only, server-only, and deployment) are in [`docs/architecture.md`](docs/architecture.md).
+Full architecture diagrams (overall, client-only, server-only, and deployment) and the ERD are included in the project submission as separate Word documents, not in this repository.
 
 The preserved `microservices/` homework demonstration is a separate, self-contained module and is not part of the primary ExamApp runtime — see [`microservices/README.md`](microservices/README.md).
 
@@ -323,7 +323,7 @@ npm.cmd run test:run
 
 ## Manual browser smoke checklist
 
-A full manual smoke-test checklist covering authentication, authoring, publication, notices, student delivery, grading, and result publication is in [`docs/testing.md`](docs/testing.md).
+A full manual smoke-test checklist covering authentication, authoring, publication, notices, student delivery, grading, and result publication is included in the project submission as a separate Word document, not in this repository.
 
 ## Security notes
 
@@ -357,4 +357,4 @@ Development follows a feature workflow:
 feature branch  ->  pull request  ->  dev  ->  release pull request  ->  main
 ```
 
-Each milestone was developed on its own feature branch and merged into `dev` through a pull request: `feature/initialServer`, `feature/auth-foundation`, `feature/exam-authoring`, `feature/exam-delivery-submission`, `feature/grading-results`, `feature/docker-config`, and `feature/microservices` (preserved as a separate homework demonstration, not merged into the runtime). Final documentation and cleanup were completed on `feature/final-documentation` before release to `main`. See [`docs/milestones.md`](docs/milestones.md) for the full milestone-by-milestone history.
+Each milestone was developed on its own feature branch and merged into `dev` through a pull request: `feature/initialServer`, `feature/auth-foundation`, `feature/exam-authoring`, `feature/exam-delivery-submission`, `feature/grading-results`, `feature/docker-config`, and `feature/microservices` (preserved as a separate homework demonstration, not merged into the runtime). Final documentation and cleanup were completed on `feature/final-documentation` before release to `main`. The full milestone-by-milestone history is included in the project submission as a separate Word document, not in this repository.
